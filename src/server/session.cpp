@@ -1,37 +1,48 @@
 #include "common.hpp"
-#include <string>
-#include <vector>
-#include <cstring>
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
+#include <boost/shared_ptr.hpp>
+#include <boost/thread.hpp>
+#include <cstring>
+#include <string>
+#include <vector>
 
-#define END_IF(X) if(X) { std::cout << "fail" << std::endl; delete this; return; }
+#define END_IF(X)                                                              \
+  if (X) {                                                                     \
+    std::cout << "fail" << std::endl;                                          \
+    delete this;                                                               \
+    return;                                                                    \
+  }
 
-server::session::session(server &s, boost::asio::io_service &io_service) 
-  : serv(s), sock(io_service), strand(io_service) {}
+server::session::session(server &s,
+                         boost::shared_ptr<boost::asio::io_service> io_service)
+    : serv(s), sock(*io_service), strand(*io_service) {}
 
 boost::asio::ip::tcp::socket &server::session::socket() { return sock; }
 
 void server::session::start() {
   sock.async_read_some(
       boost::asio::buffer(buf, max_length),
-      boost::bind(&server::session::f0_received, this, boost::asio::placeholders::error,
+      boost::bind(&server::session::f0_received, this,
+                  boost::asio::placeholders::error,
                   boost::asio::placeholders::bytes_transferred));
 }
 
 void server::session::f0_received(const boost::system::error_code &err,
-                         size_t bytes_transferred) {
+                                  size_t bytes_transferred) {
   if (err) {
     mux.lock();
     std::cerr << "[clien::f1_received] Error: " << err << std::endl;
     mux.unlock();
+    delete this;
   } else {
     mux.lock();
+    std::cout << std::endl;
     std::cout << "f0 received, " << bytes_transferred << " bytes transferred"
               << std::endl;
     mux.unlock();
 
-    auto checking = [](const char *d, bool saving=false) {
+    auto checking = [](const char *d, bool saving = false) {
       std::cout << (saving ? "saving " : "checking ");
       int i = 0;
       while (d[i] != '\0')
@@ -41,11 +52,11 @@ void server::session::f0_received(const boost::system::error_code &err,
     };
 
     byte *cur = buf;
-    
+
     auto debug = [&]() {
-      std::cout << (uint)*(cur + 0) << std::endl;
-      std::cout << (uint)*(cur + 1) << std::endl;
-      std::cout << (uint)*(cur + 2) << std::endl;
+      std::cout << (uint) * (cur + 0) << std::endl;
+      std::cout << (uint) * (cur + 1) << std::endl;
+      std::cout << (uint) * (cur + 2) << std::endl;
       for (int i = 0; i < bytes_transferred; ++i) {
         if ((uint)buf[i] < 0x10)
           std::cout << 0;
@@ -61,7 +72,8 @@ void server::session::f0_received(const boost::system::error_code &err,
     checking("message size");
     uint32_t message_size;
     std::memcpy(&message_size, cur, sizeof(message_size));
-    END_IF(message_size != bytes_transferred || message_size < f0_bytes_wo_dsid);
+    END_IF(message_size != bytes_transferred ||
+           message_size < f0_bytes_wo_dsid);
     cur += sizeof(message_size);
     std::cout << message_size << std::endl;
 
@@ -138,39 +150,84 @@ void server::session::f0_received(const boost::system::error_code &err,
     // END_IF(cur != buf + message_size);
     std::cout << "done" << std::endl;
 
-    // std::cout << client_dsid << std::endl;
-  }
-}
+    std::cout << std::endl;
 
-void server::session::handle_read(const boost::system::error_code &error,
-                          size_t bytes_transferred) {
-  if (!error) {
+    strand.post(boost::bind(&session::compute_secret, this));
+
+    int f1_size = load_f1();
     boost::asio::async_write(
-        sock, boost::asio::buffer(buf, bytes_transferred),
-        boost::bind(&server::session::handle_write, this,
+        sock, boost::asio::buffer(buf, f1_size),
+        boost::bind(&server::session::f1_sent, this,
                     boost::asio::placeholders::error,
                     boost::asio::placeholders::bytes_transferred));
-  } else {
-    delete this;
   }
 }
 
-void server::session::handle_write(const boost::system::error_code &error,
-                           size_t bytes_transferred) {
-  if (!error) {
-    sock.async_read_some(
-        boost::asio::buffer(buf, max_length),
-        boost::bind(&server::session::handle_read, this,
-                    boost::asio::placeholders::error,
-                    boost::asio::placeholders::bytes_transferred));
-  } else {
+void server::session::compute_secret() {
+  mux.lock();
+  std::cout << "shared secret computation start" << std::endl;
+  mux.unlock();
+  boost::this_thread::sleep(boost::posix_time::seconds(1));
+  mux.lock();
+  std::cout << "shared secret computation stop" << std::endl;
+  mux.unlock();
+  // sock.async_read_some(
+  //     boost::asio::buffer(buf, max_length),
+  //     boost::bind(&server::session::f2_received, this,
+  //                 boost::asio::placeholders::error,
+  //                 boost::asio::placeholders::bytes_transferred));
+}
+
+void server::session::f1_sent(const boost::system::error_code &error,
+                              size_t bytes_transferred) {
+  if (error) {
+    mux.lock();
+    std::cerr << "[server::session::f1_sent] Error: " << error << std::endl;
+    mux.unlock();
     delete this;
+  } else {
+    mux.lock();
+    std::cout << "f1 sent, " << bytes_transferred << " bytes transferred"
+              << std::endl;
+    mux.unlock();
+    strand.post(boost::bind(&session::read_f2, this));
   }
 }
 
-void server::session::compute_secret(std::string client_public) {
+void server::session::read_f2() {
+  sock.async_read_some(
+      boost::asio::buffer(buf, max_length),
+      boost::bind(&server::session::f2_received, this,
+                  boost::asio::placeholders::error,
+                  boost::asio::placeholders::bytes_transferred));
+}
 
-} 
+void server::session::f2_received(const boost::system::error_code &error,
+                                  size_t bytes_transferred) {
+  if (error) {
+    mux.lock();
+    std::cerr << "[server::session::f2_received] Error: " << error << std::endl;
+    mux.unlock();
+  } else {
+    mux.lock();
+    std::cout << "f2 received, " << bytes_transferred << " bytes transferred"
+              << std::endl;
+    mux.unlock();
+  }
+}
+
+// void server::session::handle_write(const boost::system::error_code &error,
+//                                    size_t bytes_transferred) {
+//   if (!error) {
+//     sock.async_read_some(
+//         boost::asio::buffer(buf, max_length),
+//         boost::bind(&server::session::handle_read, this,
+//                     boost::asio::placeholders::error,
+//                     boost::asio::placeholders::bytes_transferred));
+//   } else {
+//     delete this;
+//   }
+// }
 
 /**
  * f1 structure:
@@ -179,7 +236,7 @@ void server::session::compute_secret(std::string client_public) {
  * header length :: Uint16 in LE                           :: 2 bytes
  * handshake message type :: f1                            :: 1 byte
  * request id :: 0 for handshake messages                  :: 4 bytes
- * 
+ *
  * BODY
  * dsid length :: Uint8                                    :: 1 byte
  * dsid                                                    :: x bytes
@@ -202,7 +259,7 @@ int server::session::load_f1() {
   total_size += 2;
 
   /* handshake message type f0, 1 byte */
-  buf[total_size++] = 0xf0;
+  buf[total_size++] = 0xf1;
 
   /* request id (0 for handshake messages), 4 bytes */
   for (int i = 0; i < 4; ++i)

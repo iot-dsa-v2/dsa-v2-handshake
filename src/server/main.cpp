@@ -56,10 +56,10 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<boost::asio::io_service::work> work(
         new boost::asio::io_service::work(*io_service));
 
-    server s(*io_service, std::atoi(argv[1]));
+    server s(io_service, std::atoi(argv[1]));
 
     boost::thread_group worker_threads;
-    for (int i = 0; i < 1; ++i) {
+    for (int i = 0; i < 5; ++i) {
       worker_threads.create_thread(boost::bind(&WorkerThread, io_service));
     }
 

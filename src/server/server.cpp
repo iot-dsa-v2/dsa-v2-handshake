@@ -5,14 +5,15 @@
 #include <sstream>
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
+#include <boost/shared_ptr.hpp>
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
 
 #include "crypto.hpp"
 
-server::server(boost::asio::io_service &io_service, short port)
+server::server(boost::shared_ptr<boost::asio::io_service> io_service, short port)
     : io_service(io_service), ecdh("secp256k1"),
-      acceptor(io_service, boost::asio::ip::tcp::endpoint(
+      acceptor(*io_service, boost::asio::ip::tcp::endpoint(
                                boost::asio::ip::tcp::v4(), port)) {
   ecdh.set_private_key_hex("e4c386d0427062374f22545ea926fd94319220a6a71bfa9c126ed96045a8ca1e");
   dsa::hash hash("sha256");

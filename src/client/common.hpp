@@ -6,14 +6,24 @@
 #include <boost/thread/mutex.hpp>
 #include <string>
 
+#include "crypto.hpp"
+
 extern boost::mutex mux;
 
 class client {
   boost::asio::ip::tcp::socket sock;
+  boost::asio::io_service::strand strand;
   std::string dsid;
   std::string public_key;
   enum { max_length = 2048, f0_bytes_wo_dsid = 112 };
   unsigned char buf[max_length];
+  dsa::ecdh ecdh;
+  std::string shared_secret;
+  std::string broker_dsid;
+  byte broker_public[65];
+  byte broker_salt[32];
+
+  void compute_secret();
 
   int load_f0();
 
