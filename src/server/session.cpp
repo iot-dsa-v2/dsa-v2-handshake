@@ -16,13 +16,16 @@
 
 server::session::session(server &s,
                          boost::shared_ptr<boost::asio::io_service> io_service)
-    : serv(s), sock(*io_service), strand(*io_service) {}
+    : serv(s), sock(*io_service), strand(*io_service) {
+  session_id = "sampe-session-001";
+  path = "/downstream/mlink1";
+}
 
 boost::asio::ip::tcp::socket &server::session::socket() { return sock; }
 
 void server::session::start() {
   sock.async_read_some(
-      boost::asio::buffer(buf, max_length),
+      boost::asio::buffer(read_buf, max_length),
       boost::bind(&server::session::f0_received, this,
                   boost::asio::placeholders::error,
                   boost::asio::placeholders::bytes_transferred));
@@ -51,19 +54,19 @@ void server::session::f0_received(const boost::system::error_code &err,
         std::cout << '.';
     };
 
-    byte *cur = buf;
+    byte *cur = read_buf;
 
     auto debug = [&]() {
       std::cout << (uint) * (cur + 0) << std::endl;
       std::cout << (uint) * (cur + 1) << std::endl;
       std::cout << (uint) * (cur + 2) << std::endl;
       for (int i = 0; i < bytes_transferred; ++i) {
-        if ((uint)buf[i] < 0x10)
+        if ((uint)read_buf[i] < 0x10)
           std::cout << 0;
-        std::cout << std::hex << (uint)buf[i];
+        // std::cout << std::hex << (uint)buf[i];
       }
       std::cout << std::endl;
-      for (byte *ptr = buf; ptr < cur; ptr++)
+      for (byte *ptr = read_buf; ptr < cur; ptr++)
         std::cout << "  ";
       std::cout << "^" << std::endl;
     };
@@ -91,7 +94,7 @@ void server::session::f0_received(const boost::system::error_code &err,
     std::memcpy(&message_type, cur, sizeof(message_size));
     END_IF(message_type != 0xf0);
     cur += sizeof(message_type);
-    std::cout << std::hex << (uint)message_type << std::endl;
+    std::cout << std::hex << (uint)message_type << std::dec << std::endl;
 
     /* check to make sure request id is correct */
     checking("request id");
@@ -109,8 +112,6 @@ void server::session::f0_received(const boost::system::error_code &err,
     cur += sizeof(version);
     std::cout << (uint)version[0] << '.' << (uint)version[1] << std::endl;
 
-    // debug();
-
     /* check DSID length */
     checking("DSID length");
     byte dsid_length;
@@ -123,16 +124,17 @@ void server::session::f0_received(const boost::system::error_code &err,
     checking("client DSID", true);
     byte new_dsid[dsid_length];
     std::memcpy(new_dsid, cur, sizeof(new_dsid));
-    new_dsid[dsid_length] = '\0';
-    client_dsid = reinterpret_cast<char *>(new_dsid);
     cur += sizeof(new_dsid);
+    client_dsid.assign(new_dsid, new_dsid + sizeof(new_dsid));
     // END_IF(cur > buf + message_size);
     std::cout << "done" << std::endl;
 
     /* save public key */
     checking("client public key", true);
-    std::memcpy(client_public, cur, sizeof(client_public));
-    cur += sizeof(client_public);
+    byte tmp_pub[65];
+    std::memcpy(tmp_pub, cur, sizeof(tmp_pub));
+    cur += sizeof(tmp_pub);
+    client_public = std::vector<byte>(tmp_pub, tmp_pub + sizeof(tmp_pub));
     // END_IF(cur > buf + message_size);
     std::cout << "done" << std::endl;
 
@@ -145,18 +147,19 @@ void server::session::f0_received(const boost::system::error_code &err,
 
     /* save client salt */
     checking("client salt", true);
-    std::memcpy(client_salt, cur, sizeof(client_salt));
-    cur += sizeof(client_salt);
+    byte tmp_salt[32];
+    std::memcpy(tmp_salt, cur, sizeof(tmp_salt));
+    cur += sizeof(tmp_salt);
+    client_salt.assign(tmp_salt, tmp_salt + sizeof(tmp_salt));
     // END_IF(cur != buf + message_size);
     std::cout << "done" << std::endl;
-
     std::cout << std::endl;
 
     strand.post(boost::bind(&session::compute_secret, this));
 
     int f1_size = load_f1();
     boost::asio::async_write(
-        sock, boost::asio::buffer(buf, f1_size),
+        sock, boost::asio::buffer(write_buf, f1_size),
         boost::bind(&server::session::f1_sent, this,
                     boost::asio::placeholders::error,
                     boost::asio::placeholders::bytes_transferred));
@@ -164,18 +167,10 @@ void server::session::f0_received(const boost::system::error_code &err,
 }
 
 void server::session::compute_secret() {
-  mux.lock();
-  std::cout << "shared secret computation start" << std::endl;
-  mux.unlock();
-  boost::this_thread::sleep(boost::posix_time::seconds(1));
-  mux.lock();
-  std::cout << "shared secret computation stop" << std::endl;
-  mux.unlock();
-  // sock.async_read_some(
-  //     boost::asio::buffer(buf, max_length),
-  //     boost::bind(&server::session::f2_received, this,
-  //                 boost::asio::placeholders::error,
-  //                 boost::asio::placeholders::bytes_transferred));
+  shared_secret = serv.ecdh.compute_secret(client_public);
+  dsa::hmac hmac("sha256", shared_secret);
+  hmac.update(client_salt);
+  auth = hmac.digest();
 }
 
 void server::session::f1_sent(const boost::system::error_code &error,
@@ -190,20 +185,22 @@ void server::session::f1_sent(const boost::system::error_code &error,
     std::cout << "f1 sent, " << bytes_transferred << " bytes transferred"
               << std::endl;
     mux.unlock();
-    strand.post(boost::bind(&session::read_f2, this));
-  }
-}
 
-void server::session::read_f2() {
-  sock.async_read_some(
-      boost::asio::buffer(buf, max_length),
-      boost::bind(&server::session::f2_received, this,
-                  boost::asio::placeholders::error,
-                  boost::asio::placeholders::bytes_transferred));
+    static const auto wait_for_secret =
+        [&](const boost::system::error_code &error, size_t bytes_transferred) {
+          strand.post(boost::bind(&server::session::f2_received, this, error,
+                                  bytes_transferred));
+        };
+    sock.async_read_some(
+        boost::asio::buffer(read_buf, max_length),
+        boost::bind<void>(wait_for_secret, boost::asio::placeholders::error,
+                          boost::asio::placeholders::bytes_transferred));
+  }
 }
 
 void server::session::f2_received(const boost::system::error_code &error,
                                   size_t bytes_transferred) {
+  std::cout << std::endl;
   if (error) {
     mux.lock();
     std::cerr << "[server::session::f2_received] Error: " << error << std::endl;
@@ -213,21 +210,31 @@ void server::session::f2_received(const boost::system::error_code &error,
     std::cout << "f2 received, " << bytes_transferred << " bytes transferred"
               << std::endl;
     mux.unlock();
+
+    int size = load_f3();
+    boost::asio::async_write(
+        sock, boost::asio::buffer(write_buf, size),
+        boost::bind(&server::session::f3_sent, this,
+                    boost::asio::placeholders::error,
+                    boost::asio::placeholders::bytes_transferred));
   }
 }
 
-// void server::session::handle_write(const boost::system::error_code &error,
-//                                    size_t bytes_transferred) {
-//   if (!error) {
-//     sock.async_read_some(
-//         boost::asio::buffer(buf, max_length),
-//         boost::bind(&server::session::handle_read, this,
-//                     boost::asio::placeholders::error,
-//                     boost::asio::placeholders::bytes_transferred));
-//   } else {
-//     delete this;
-//   }
-// }
+void server::session::f3_sent(const boost::system::error_code &error,
+                              size_t bytes_transferred) {
+  if (error) {
+    mux.lock();
+    std::cout << "[server::session::f3_sent] Error: " << error << std::endl;
+    mux.unlock();
+  } else {
+    mux.lock();
+    std::cout << std::endl;
+    std::cout << "f3 sent, " << bytes_transferred << " bytes transferred"
+              << std::endl;
+    std::cout << std::endl << "HANDSHAKE COMPLETE" << std::endl;
+    mux.unlock();
+  }
+}
 
 /**
  * f1 structure:
@@ -251,42 +258,98 @@ int server::session::load_f1() {
 
   /* put placeholder for total length, 4 bytes */
   for (int i = 0; i < 4; ++i)
-    buf[total_size++] = 0;
+    write_buf[total_size++] = 0;
 
   /* header length, 2 bytes, LE */
   uint16_t header_length = 11;
-  std::memcpy(&buf[total_size], &header_length, sizeof(header_length));
+  std::memcpy(&write_buf[total_size], &header_length, sizeof(header_length));
   total_size += 2;
 
   /* handshake message type f0, 1 byte */
-  buf[total_size++] = 0xf1;
+  write_buf[total_size++] = 0xf1;
 
   /* request id (0 for handshake messages), 4 bytes */
   for (int i = 0; i < 4; ++i)
-    buf[total_size++] = 0;
+    write_buf[total_size++] = 0;
 
   /* length of dsid */
-  buf[total_size++] = serv.dsid.size();
+  write_buf[total_size++] = serv.dsid.size();
 
   /* dsid content */
   for (byte c : serv.dsid)
-    buf[total_size++] = c;
+    write_buf[total_size++] = c;
 
   /* public key, 65 bytes */
   for (byte c : serv.public_key)
-    buf[total_size++] = c;
+    write_buf[total_size++] = c;
 
   /* salt, 32 bytes */
   // std::string salt = dsa::gen_salt(32);
   std::vector<byte> salt = dsa::hex2bin(
       "eccbc87e4b5ce2fe28308fd9f2a7baf3a87ff679a2f3e71d9181a67b7542122c");
   for (byte c : salt)
-    buf[total_size++] = c;
+    write_buf[total_size++] = c;
   // std::cout << (uint32_t)salt[31] << std::endl;
 
   /* write total length */
-  std::memcpy(buf, &total_size, sizeof(total_size));
+  std::memcpy(write_buf, &total_size, sizeof(total_size));
   // write_LE(buf, &total_size, 4);
 
   return total_size;
+}
+
+int server::session::load_f3() {
+  uint32_t total = 0;
+
+  /* total length placeholder */
+  for (int i = 0; i < sizeof(total); ++i)
+    write_buf[total++] = 0;
+
+  /* header length */
+  uint16_t header_length = 11;
+  std::memcpy(&write_buf[total], &header_length, sizeof(header_length));
+  total += sizeof(header_length);
+
+  /* message type */
+  write_buf[total++] = 0xf3;
+
+  /* request id */
+  for (int i = 0; i < 4; ++i)
+    write_buf[total++] = 0;
+
+  /* session id length */
+  uint16_t id_length = session_id.size();
+  std::memcpy(&write_buf[total], &id_length, sizeof(id_length));
+  total += sizeof(id_length);
+
+  /* session id */
+  std::memcpy(&write_buf[total], session_id.c_str(), id_length);
+  total += id_length;
+
+  /* client path length */
+  uint16_t path_length = path.size();
+  std::memcpy(&write_buf[total], &path_length, sizeof(path_length));
+  total += sizeof(path_length);
+
+  /* client path */
+  std::memcpy(&write_buf[total], path.c_str(), path_length);
+  total += path_length;
+
+  /* auth */ 
+  std::memcpy(&write_buf[total], &auth[0], auth.size());
+  total += auth.size();
+
+  /* write total length */
+  std::memcpy(write_buf, &total, sizeof(total));
+
+  // mux.lock();
+  // for (int i = 0; i < total; ++i) {
+  //   if (write_buf[i] < 0x10)
+  //     std::cout << 0;
+  //   std::cout << std::hex << (uint)write_buf[i];
+  // }
+  // std::cout << std::dec << std::endl;
+  // mux.unlock();
+
+  return total;
 }

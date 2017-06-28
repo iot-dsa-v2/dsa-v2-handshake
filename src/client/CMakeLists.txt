@@ -17,5 +17,6 @@ set(SOURCE_FILES
 
 add_executable(client ${SOURCE_FILES})
 target_link_libraries(client ${EXTRA_LIBS})
+target_compile_features(client PRIVATE cxx_range_for)
 
 install(TARGETS client RUNTIME DESTINATION bin)

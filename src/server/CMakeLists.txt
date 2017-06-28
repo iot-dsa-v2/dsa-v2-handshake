@@ -18,5 +18,6 @@ set(SOURCE_FILES
 
 add_executable(server ${SOURCE_FILES})
 target_link_libraries(server ${EXTRA_LIBS})
+target_compile_features(server PRIVATE cxx_range_for)
 
 install(TARGETS server RUNTIME DESTINATION bin)

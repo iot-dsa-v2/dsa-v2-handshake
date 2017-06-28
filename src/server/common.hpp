@@ -2,6 +2,8 @@
 #define SERVER_COMMON_HPP
 
 #include <string>
+#include <vector>
+#include <array>
 #include <boost/asio.hpp>
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/shared_ptr.hpp>
@@ -16,7 +18,7 @@ private:
   boost::shared_ptr<boost::asio::io_service> io_service;
   boost::asio::ip::tcp::acceptor acceptor;
   std::string dsid;
-  std::string public_key;
+  std::vector<byte> public_key;
   dsa::ecdh ecdh;
 
   class session : public boost::enable_shared_from_this<session> {
@@ -24,15 +26,24 @@ private:
     server &serv;
     boost::asio::ip::tcp::socket sock;
     boost::asio::io_service::strand strand;
+
     enum { max_length = 512, f0_bytes_wo_dsid = 112 };
-    unsigned char buf[max_length];
-    std::string shared_secret;
-    std::string client_dsid;
-    byte client_public[65];
+    byte write_buf[max_length];
+    byte read_buf[max_length];
+
+    std::vector<byte> shared_secret;
+    std::vector<byte> client_dsid;
+    std::vector<byte> client_public;
+    std::vector<byte> client_salt;
+    std::vector<byte> auth;
+
+    std::string session_id;
+    std::string path;
+
     bool use_ssl;
-    byte client_salt[32];
 
     int load_f1();
+    int load_f3();
     void compute_secret();
 
     void f0_received(const boost::system::error_code &err, size_t bytes_transferred);

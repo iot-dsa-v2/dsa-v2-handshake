@@ -19,12 +19,9 @@ server::server(boost::shared_ptr<boost::asio::io_service> io_service, short port
   dsa::hash hash("sha256");
 
   public_key = ecdh.get_public_key();
-
   hash.update(public_key);
 
   dsid = "broker-" + dsa::base64url(hash.digest_base64());
-
-  std::cout << dsid << std::endl;
 
   session *new_session = new session(*this, io_service);
   acceptor.async_accept(new_session->socket(),

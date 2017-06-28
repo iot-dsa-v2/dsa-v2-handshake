@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <iostream>
 #include <openssl/ec.h>
 #include <openssl/evp.h>
 
@@ -19,10 +20,9 @@ namespace dsa {
     ecdh(const char *curve);
     ~ecdh();
     
-    std::string get_private_key();
-    std::string get_public_key();
-    int private_key_length();
-    int public_key_length();
+    std::vector<byte> get_private_key();
+    std::vector<byte> get_public_key();
+    std::vector<byte> compute_secret(std::vector<byte> public_key);
     void set_private_key_hex(const char *data);
   };
 
@@ -35,15 +35,41 @@ namespace dsa {
     hash(const char *hash_type);
     ~hash();
 
-    void update(std::string data);
+    void update(std::vector<byte> data);
     std::string digest_base64();
+  };
+
+  class hmac {
+  private:
+    HMAC_CTX *ctx;
+    bool initialized;
+
+  public:
+    hmac(const char *alg, std::vector<byte> to_hash);
+    ~hmac();
+
+    void init(const char *alg, std::vector<byte> to_hash);
+    void update(std::vector<byte> data);
+    std::vector<byte> digest();
   };
 
   std::string base64url(std::string str);
   std::string base64_decode(std::string const& encoded_string);
   std::string base64_encode(unsigned char const* bytes_to_encode, unsigned int in_len);
   std::string gen_salt(int len);
-  std::vector<unsigned char> hex2bin(const char *src);
+  std::vector<byte> hex2bin(const char *src);
+}
+
+template <typename T>
+inline std::ostream& operator << (std::ostream& os, const std::vector<T>& v) {
+  os << "[";
+  if (v.size() > 0) {
+    for (int i = 0; i < v.size() - 1; ++i)
+      os << v[i] << ", ";
+    os << v[v.size() - 1];
+  }
+  os << "]";
+  return os;  
 }
 
 #endif // DSA_CRYPTO_HPP

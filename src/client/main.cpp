@@ -48,12 +48,16 @@ int main(int argc, char *argv[]) {
     boost::shared_ptr<boost::asio::io_service::work> work(
         new boost::asio::io_service::work(*io_service));
 
-    client c(io_service, argv[1], std::atoi(argv[2]));
-
     boost::thread_group worker_threads;
-    for (int i = 0; i < 1; ++i) {
+    for (int i = 0; i < 5; ++i) {
       worker_threads.create_thread(boost::bind(WorkerThread, io_service));
     }
+    boost::this_thread::sleep(boost::posix_time::milliseconds(100));
+    mux.lock();
+    std::cout << std::endl << std::endl;
+    mux.unlock();
+
+    client c(io_service, argv[1], std::atoi(argv[2]));
 
     worker_threads.join_all();
   } catch (std::exception &e) {

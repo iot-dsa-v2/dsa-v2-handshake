@@ -1,6 +1,8 @@
 #ifndef CLIENT_COMMON_HPP
 #define CLIENT_COMMON_HPP
 
+#include <vector>
+#include <array>
 #include <boost/asio.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/thread/mutex.hpp>
@@ -14,18 +16,22 @@ class client {
   boost::asio::ip::tcp::socket sock;
   boost::asio::io_service::strand strand;
   std::string dsid;
-  std::string public_key;
+  std::vector<byte> public_key;
   enum { max_length = 2048, f0_bytes_wo_dsid = 112 };
-  unsigned char buf[max_length];
+  byte write_buf[max_length];
+  byte read_buf[max_length];
   dsa::ecdh ecdh;
-  std::string shared_secret;
-  std::string broker_dsid;
-  byte broker_public[65];
-  byte broker_salt[32];
+  std::vector<byte> shared_secret;
+  std::vector<byte> broker_dsid;
+  std::vector<byte> broker_public;
+  std::vector<byte> broker_salt;
+  std::string token;
+  std::vector<byte> auth;
 
   void compute_secret();
 
   int load_f0();
+  int load_f2();
 
   void f0_sent(const boost::system::error_code &err, size_t bytes_transferred);
   void f1_received(const boost::system::error_code &err, size_t bytes_transferred);
