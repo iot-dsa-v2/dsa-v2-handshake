@@ -1,2 +1,7 @@
 .vscode/
 yarn.lock
+*.pem
+bin/
+build/
+lib/
+package.json
