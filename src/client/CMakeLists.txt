@@ -3,6 +3,9 @@ project(client)
 
 set(CMAKE_CXX_STANDARD 11)
 
+find_package(Threads) 
+set(EXTRA_LIBS ${EXTRA_LIBS} ${CMAKE_THREAD_LIBS_INIT})
+
 set(BOOST_ROOT "/usr/local/Cellar/boost/1.64.0_1")
 find_package(Boost 1.6 REQUIRED COMPONENTS system thread)
 include_directories(${Boost_INCLUDE_DIRS})
