@@ -61,6 +61,7 @@ private:
 
   public:
     session(server &s, boost::shared_ptr<boost::asio::io_service> io_service);
+    ~session();
 
     boost::asio::ip::tcp::socket &socket();
 

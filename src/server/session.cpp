@@ -29,6 +29,10 @@ server::session::session(server &s,
       "eccbc87e4b5ce2fe28308fd9f2a7baf3a87ff679a2f3e71d9181a67b7542122c");
 }
 
+server::session::~session() {
+  std::cout << "[" << session_id << "] Session ended" << std::endl;
+}
+
 boost::asio::ip::tcp::socket &server::session::socket() { return sock; }
 
 void server::session::start() {
@@ -338,6 +342,8 @@ void server::session::f3_sent(const boost::system::error_code &error,
 
 void server::session::read_loop(const boost::system::error_code &error,
                                 size_t bytes_transferred) {
+  static int count = 0;
+  std::cout << "read loop " << count++ << std::endl;
   if (!error) {
     sock.async_read_some(
         boost::asio::buffer(read_buf, max_length),
@@ -345,7 +351,7 @@ void server::session::read_loop(const boost::system::error_code &error,
                     boost::asio::placeholders::error,
                     boost::asio::placeholders::bytes_transferred));
   } else {
-    // serv.end_session(this);
+    serv.end_session(this);
   }
 }
 
