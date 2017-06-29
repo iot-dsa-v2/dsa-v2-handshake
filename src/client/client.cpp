@@ -20,14 +20,16 @@ client::client(boost::shared_ptr<boost::asio::io_service> io_service,
                char *host, int port)
     : sock(*io_service), strand(*io_service), ecdh("secp256k1") {
   token = "sample_token_string";
+
   ecdh.set_private_key_hex(
       "e452e1d89dcd16e1ad31336c77f8eace1b1884c06c621aefb7670d47fe54d1f7");
   dsa::hash hash("sha256");
-
   public_key = ecdh.get_public_key();
   hash.update(public_key);
-
   dsid = "mlink-" + dsa::base64url(hash.digest_base64());
+
+  salt = dsa::hex2bin(
+      "c4ca4238a0b923820dcc509a6f75849bc81e728d9d4c2f636f067f89cc14862c");
 
   boost::asio::ip::tcp::resolver resolver(*io_service);
   boost::asio::ip::tcp::resolver::query query(
@@ -191,9 +193,16 @@ void client::f1_received(const boost::system::error_code &err,
 
 void client::compute_secret() {
   shared_secret = ecdh.compute_secret(broker_public);
+
+  /* compute client auth */
   dsa::hmac hmac("sha256", shared_secret);
   hmac.update(broker_salt);
   auth = hmac.digest();
+
+  /* compute broker auth */
+  dsa::hmac broker_hmac("sha256", shared_secret);
+  broker_hmac.update(salt);
+  broker_auth = broker_hmac.digest();
 }
 
 void client::f2_sent(const boost::system::error_code &err,
@@ -228,6 +237,87 @@ void client::f3_received(const boost::system::error_code &err,
     std::cout << "f3 received, " << bytes_transferred << " bytes transferred"
               << std::endl;
     mux.unlock();
+
+    auto checking = [](const char *d, bool saving = false) {
+      std::cout << (saving ? "saving " : "checking ");
+      int i = 0;
+      while (d[i] != '\0')
+        std::cout << d[i++];
+      while ((saving ? 7 : 9) + (i++) < 30)
+        std::cout << '.';
+    };
+
+    byte *cur = read_buf;
+
+    /* check to make sure message size matches */
+    checking("message size");
+    uint32_t message_size;
+    std::memcpy(&message_size, cur, sizeof(message_size));
+    END_IF(message_size != bytes_transferred);
+    cur += sizeof(message_size);
+    std::cout << message_size << std::endl;
+
+    /* check to make sure header length is correct */
+    checking("header length");
+    uint16_t header_size;
+    std::memcpy(&header_size, cur, sizeof(header_size));
+    END_IF(header_size != 11);
+    cur += sizeof(header_size);
+    std::cout << header_size << std::endl;
+
+    /* check to make sure message type is correct */
+    checking("message type");
+    uint8_t message_type;
+    std::memcpy(&message_type, cur, sizeof(message_size));
+    END_IF(message_type != 0xf3);
+    cur += sizeof(message_type);
+    std::cout << std::hex << (uint)message_type << std::dec << std::endl;
+
+    /* check to make sure request id is correct */
+    checking("request id");
+    uint32_t request_id;
+    std::memcpy(&request_id, cur, sizeof(request_id));
+    END_IF(request_id != 0);
+    cur += sizeof(request_id);
+    std::cout << request_id << std::endl;
+
+    /* check session id length */
+    checking("session id length");
+    uint16_t session_id_length;
+    std::memcpy(&session_id_length, cur, sizeof(session_id_length));
+    cur += sizeof(session_id_length);
+    std::cout << session_id_length << std::endl;
+
+    /* save session id */
+    checking("session id", true);
+    byte session[session_id_length];
+    std::memcpy(session, cur, session_id_length);
+    cur += session_id_length;
+    session_id.assign(session, session + session_id_length);
+    std::cout << "done" << std::endl;
+
+    /* check path length */
+    checking("path length");
+    uint16_t path_length;
+    std::memcpy(&path_length, cur, sizeof(path_length));
+    cur += sizeof(path_length);
+    std::cout << path_length << std::endl;
+
+    /* save path */
+    checking("path", true);
+    byte tmp_path[path_length];
+    std::memcpy(tmp_path, cur, path_length);
+    cur += path_length;
+    path.assign(tmp_path, tmp_path + path_length);
+    std::cout << "done" << std::endl;
+
+    /* check broker auth */
+    checking("broker auth");
+    for (int i = 0; i < 32; ++i)
+      END_IF(*(cur++) != broker_auth[i]);
+    std::cout << "done" << std::endl;
+
+    std::cout << std::endl << "HANDSHAKE SUCCESSFUL" << std::endl;
   }
 }
 
@@ -304,8 +394,6 @@ int client::load_f0() {
 
   /* salt, 32 bytes */
   // std::string salt = dsa::gen_salt(32);
-  std::vector<byte> salt = dsa::hex2bin(
-      "c4ca4238a0b923820dcc509a6f75849bc81e728d9d4c2f636f067f89cc14862c");
   for (byte c : salt)
     write_buf[total_size++] = c;
   // std::cout << (uint32_t)salt[31] << std::endl;

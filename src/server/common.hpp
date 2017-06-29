@@ -35,12 +35,17 @@ private:
     std::vector<byte> client_dsid;
     std::vector<byte> client_public;
     std::vector<byte> client_salt;
+    std::vector<byte> client_token;
+    std::vector<byte> client_auth;
     std::vector<byte> auth;
+    std::vector<byte> salt;
 
     std::string session_id;
     std::string path;
 
     bool use_ssl;
+    bool is_requester;
+    bool is_responder;
 
     int load_f1();
     int load_f3();
@@ -51,6 +56,8 @@ private:
     void read_f2();
     void f2_received(const boost::system::error_code &err, size_t bytes_transferred);
     void f3_sent(const boost::system::error_code &err, size_t bytes_transferred);
+
+    void read_loop(const boost::system::error_code &err, size_t bytes_transferred);
 
   public:
     session(server &s, boost::shared_ptr<boost::asio::io_service> io_service);

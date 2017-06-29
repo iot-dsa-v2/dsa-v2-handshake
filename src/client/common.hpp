@@ -25,8 +25,12 @@ class client {
   std::vector<byte> broker_dsid;
   std::vector<byte> broker_public;
   std::vector<byte> broker_salt;
+  std::vector<byte> broker_auth;
+  std::vector<byte> session_id;
+  std::vector<byte> path;
   std::string token;
   std::vector<byte> auth;
+  std::vector<byte> salt;
 
   void compute_secret();
 

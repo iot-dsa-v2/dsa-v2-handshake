@@ -43,5 +43,6 @@ std::vector<byte> dsa::hmac::digest() {
   initialized = false;
   HMAC_CTX_reset(ctx);
 
-  return std::vector<byte>(md_value, md_value + md_len);
+  std::vector<byte> out(md_value, md_value + md_len);
+  return out;
 }

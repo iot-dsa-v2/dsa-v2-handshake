@@ -61,9 +61,7 @@ int main(int argc, char *argv[]) {
       worker_threads.create_thread(boost::bind(&WorkerThread, io_service));
     }
     boost::this_thread::sleep(boost::posix_time::milliseconds(50));
-    mux.lock();
     std::cout << std::endl;
-    mux.unlock();
 
     server s(io_service, std::atoi(argv[1]));
 
