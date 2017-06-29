@@ -78,6 +78,8 @@ public:
 
   void handle_accept(session *new_session,
                      const boost::system::error_code &error);
+  
+  void end_session(session *s);
 };
 
 #endif // SERVER_COMMON_HPP

@@ -45,3 +45,7 @@ void server::handle_accept(session *new_session,
     delete new_session;
   }
 }
+
+void server::end_session(session *s) {
+  delete s;
+}

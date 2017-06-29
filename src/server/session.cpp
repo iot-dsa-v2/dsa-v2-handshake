@@ -10,9 +10,15 @@
 #define END_IF(X)                                                              \
   if (X) {                                                                     \
     std::cout << "fail" << std::endl;                                          \
-    delete this;                                                               \
     return;                                                                    \
   }
+
+// #define END_IF(X)                                                              \
+//   if (X) {                                                                     \
+//     std::cout << "fail" << std::endl;                                          \
+//     serv.end_session(this);                                                               \
+//     return;                                                                    \
+//   }
 
 server::session::session(server &s,
                          boost::shared_ptr<boost::asio::io_service> io_service)
@@ -39,7 +45,7 @@ void server::session::f0_received(const boost::system::error_code &err,
     mux.lock();
     std::cerr << "[clien::f1_received] Error: " << err << std::endl;
     mux.unlock();
-    delete this;
+    serv.end_session(this);
   } else {
     mux.lock();
     std::cout << std::endl;
@@ -188,7 +194,7 @@ void server::session::f1_sent(const boost::system::error_code &error,
     mux.lock();
     std::cerr << "[server::session::f1_sent] Error: " << error << std::endl;
     mux.unlock();
-    delete this;
+    serv.end_session(this);
   } else {
     mux.lock();
     std::cout << "f1 sent, " << bytes_transferred << " bytes transferred"
@@ -274,7 +280,7 @@ void server::session::f2_received(const boost::system::error_code &error,
     checking("client token", true);
     byte token[token_length];
     std::memcpy(token, cur, token_length);
-    client_token = std::vector<byte>(token, token + token_length);
+    // client_token = std::vector<byte>(token, token + token_length);
     cur += token_length;
     std::cout << "done" << std::endl;
 
@@ -339,7 +345,7 @@ void server::session::read_loop(const boost::system::error_code &error,
                     boost::asio::placeholders::error,
                     boost::asio::placeholders::bytes_transferred));
   } else {
-    delete this;
+    // serv.end_session(this);
   }
 }
 
