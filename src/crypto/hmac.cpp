@@ -1,7 +1,7 @@
 #include "crypto.hpp"
 #include <openssl/hmac.h>
 
-void ::dsa::hmac::init(const char *alg, std::vector<byte> data) {
+void dsa::hmac::init(const char *alg, std::vector<byte> data) {
   const EVP_MD *md = EVP_get_digestbyname(alg);
   if (md == nullptr)
     throw std::runtime_error("Failed to initialize HMAC");
