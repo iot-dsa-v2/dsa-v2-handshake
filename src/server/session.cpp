@@ -10,15 +10,9 @@
 #define END_IF(X)                                                              \
   if (X) {                                                                     \
     std::cout << "fail" << std::endl;                                          \
+    serv.end_session(this);                                                    \
     return;                                                                    \
   }
-
-// #define END_IF(X)                                                              \
-//   if (X) {                                                                     \
-//     std::cout << "fail" << std::endl;                                          \
-//     serv.end_session(this);                                                               \
-//     return;                                                                    \
-//   }
 
 server::session::session(server &s,
                          boost::shared_ptr<boost::asio::io_service> io_service)
