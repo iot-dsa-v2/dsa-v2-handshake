@@ -7,6 +7,10 @@
 #include <string>
 #include <vector>
 
+#ifdef USE_SSL
+#include <boost/asio/ssl.hpp>
+#endif // USE_SSL
+
 #define END_IF(X)                                                              \
   if (X) {                                                                     \
     std::cout << "fail" << std::endl;                                          \
@@ -14,9 +18,15 @@
     return;                                                                    \
   }
 
+#ifdef USE_SSL
+server::session::session(server &s, boost::shared_ptr<boost::asio::io_service> io_service,
+                         boost::asio::ssl::context &context)
+    : serv(s), sock(*io_service, context), strand(*io_service) {
+#else  // don't USE_SSL
 server::session::session(server &s,
                          boost::shared_ptr<boost::asio::io_service> io_service)
     : serv(s), sock(*io_service), strand(*io_service) {
+#endif // USE_SSL
   session_id = "sampe-session-001";
   path = "/downstream/mlink1";
   salt = dsa::hex2bin(
@@ -27,8 +37,33 @@ server::session::~session() {
   std::cout << "[" << session_id << "] Session ended" << std::endl;
 }
 
-boost::asio::ip::tcp::socket &server::session::socket() { return sock; }
+#ifdef USE_SSL
+void server::session::start() {
+  sock.async_handshake(boost::asio::ssl::stream_base::server,
+                       boost::bind(&server::session::handle_ssl_handshake,
+                                   this, boost::asio::placeholders::error));
+}
 
+void server::session::handle_ssl_handshake(
+    const boost::system::error_code &error) {
+  if (!error) {
+    sock.async_read_some(
+        boost::asio::buffer(read_buf, max_length),
+        boost::bind(&server::session::f0_received, this,
+                    boost::asio::placeholders::error,
+                    boost::asio::placeholders::bytes_transferred));
+  } else {
+    mux.lock();
+    std::cout << "[server::session::handle_ssl_handshake] Error: " << error
+              << std::endl;
+    mux.unlock();
+
+    serv.end_session(this);
+  }
+}
+
+ssl_socket::lowest_layer_type &server::session::socket() { return sock.lowest_layer(); }
+#else  // don't USE_SSL
 void server::session::start() {
   sock.async_read_some(
       boost::asio::buffer(read_buf, max_length),
@@ -36,6 +71,9 @@ void server::session::start() {
                   boost::asio::placeholders::error,
                   boost::asio::placeholders::bytes_transferred));
 }
+
+boost::asio::ip::tcp::socket &server::session::socket() { return sock; }
+#endif // USE_SSL
 
 void checking(const char *message, bool saving = false) {
   std::cout << (saving ? "saving " : "checking ");
@@ -55,7 +93,6 @@ void server::session::f0_received(const boost::system::error_code &err,
     serv.end_session(this);
   } else {
     mux.lock();
-    std::cout << std::endl;
     std::cout << "f0 received, " << bytes_transferred << " bytes transferred"
               << std::endl;
     mux.unlock();
@@ -199,11 +236,11 @@ void server::session::f1_sent(const boost::system::error_code &error,
               << std::endl;
     mux.unlock();
 
-    const auto wait_for_secret =
-        [&](const boost::system::error_code &error, size_t bytes_transferred) {
-          strand.post(boost::bind(&server::session::f2_received, this, error,
-                                  bytes_transferred));
-        };
+    const auto wait_for_secret = [&](const boost::system::error_code &error,
+                                     size_t bytes_transferred) {
+      strand.post(boost::bind(&server::session::f2_received, this, error,
+                              bytes_transferred));
+    };
     sock.async_read_some(
         boost::asio::buffer(read_buf, max_length),
         boost::bind<void>(wait_for_secret, boost::asio::placeholders::error,

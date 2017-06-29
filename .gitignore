@@ -1,6 +1,6 @@
 .vscode/
 yarn.lock
-*.pem
+# *.pem
 bin/
 build/
 lib/

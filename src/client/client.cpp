@@ -1,12 +1,12 @@
 #include "common.hpp"
+#include <boost/asio.hpp>
+#include <boost/bind.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/shared_ptr.hpp>
+#include <boost/thread.hpp>
 #include <cstring>
 #include <string>
 #include <vector>
-#include <boost/asio.hpp>
-#include <boost/bind.hpp>
-#include <boost/thread.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/shared_ptr.hpp>
 
 #include "crypto.hpp"
 
@@ -16,9 +16,23 @@
     return;                                                                    \
   }
 
+#ifndef USE_SSL // don't USE_SSL
+
 client::client(boost::shared_ptr<boost::asio::io_service> io_service,
                char *host, int port)
     : sock(*io_service), strand(*io_service), ecdh("secp256k1") {
+
+#else // USE_SSL
+
+client::client(boost::shared_ptr<boost::asio::io_service> io_service,
+               char *host, int port, boost::asio::ssl::context &context)
+    : sock(*io_service, context), strand(*io_service), ecdh("secp256k1") {
+  sock.set_verify_mode(boost::asio::ssl::verify_peer);
+  sock.set_verify_callback(
+      boost::bind(&client::verify_certificate, this, _1, _2));
+
+#endif // USE_SSL
+
   token = "sample_token_string";
 
   ecdh.set_private_key_hex(
@@ -35,10 +49,47 @@ client::client(boost::shared_ptr<boost::asio::io_service> io_service,
   boost::asio::ip::tcp::resolver::query query(
       host, boost::lexical_cast<std::string>(port));
   boost::asio::ip::tcp::resolver::iterator iterator = resolver.resolve(query);
+
+#ifndef USE_SSL // don't USE_SSL
   boost::asio::ip::tcp::endpoint endpoint = *iterator;
+
   sock.async_connect(endpoint, boost::bind(&client::start_handshake, this,
                                            boost::asio::placeholders::error));
+#else  // USE_SSL
+  boost::asio::async_connect(sock.lowest_layer(), iterator,
+                             boost::bind(&client::handle_ssl_handshake, this,
+                                         boost::asio::placeholders::error));
+#endif // USE_SSL
 }
+
+#ifdef USE_SSL
+bool client::verify_certificate(bool preverified,
+                                boost::asio::ssl::verify_context &ctx) {
+  // The verify callback can be used to check whether the certificate that is
+  // being presented is valid for the peer. For example, RFC 2818 describes
+  // the steps involved in doing this for HTTPS. Consult the OpenSSL
+  // documentation for more details. Note that the callback is called once
+  // for each certificate in the certificate chain, starting from the root
+  // certificate authority.
+
+  // In this example we will simply print the certificate's subject name.
+  char subject_name[256];
+  X509 *cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
+  X509_NAME_oneline(X509_get_subject_name(cert), subject_name, 256);
+  std::cout << "Verifying " << subject_name << std::endl << std::endl;
+
+  return preverified;
+}
+
+void client::handle_ssl_handshake(const boost::system::error_code &err) {
+  if (!err) {
+    sock.async_handshake(boost::asio::ssl::stream_base::client,
+        boost::bind(&client::start_handshake, this, boost::asio::placeholders::error));
+  } else {
+    std::cout << "Error: " << err << std::endl;
+  }
+}
+#endif // USE_SSL
 
 void client::start_handshake(const boost::system::error_code &err) {
   if (err) {
@@ -177,14 +228,13 @@ void client::f1_received(const boost::system::error_code &err,
     broker_salt.assign(tmp_salt, tmp_salt + sizeof(tmp_salt));
     // END_IF(cur != buf + message_size);
     std::cout << "done" << std::endl;
-    
+
     static const auto wait_for_secret = [&]() {
       int f2_size = load_f2();
       boost::asio::async_write(
           sock, boost::asio::buffer(write_buf, f2_size),
-          boost::bind(&client::f2_sent, this, 
-                boost::asio::placeholders::error,
-                boost::asio::placeholders::bytes_transferred));
+          boost::bind(&client::f2_sent, this, boost::asio::placeholders::error,
+                      boost::asio::placeholders::bytes_transferred));
     };
     strand.post(boost::bind(&client::compute_secret, this));
     strand.post(boost::bind<void>(wait_for_secret));
@@ -405,7 +455,6 @@ int client::load_f0() {
   return total_size;
 }
 
-
 /**
  * f2 structure:
  */
@@ -427,7 +476,7 @@ int client::load_f2() {
   /* request id */
   for (int i = 0; i < 4; ++i)
     write_buf[total++] = 0;
-  
+
   /* token length */
   uint16_t token_length = token.size();
   std::memcpy(&write_buf[total], &token_length, sizeof(token_length));
@@ -462,5 +511,5 @@ int client::load_f2() {
   // std::cout << std::dec << std::endl;
   // mux.unlock();
 
-  return total; 
+  return total;
 }

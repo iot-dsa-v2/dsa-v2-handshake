@@ -6,6 +6,10 @@
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
 
+#ifdef USE_SSL
+#include <boost/asio/ssl.hpp>
+#endif // USE_SSL
+
 boost::mutex mux;
 
 void WorkerThread(boost::shared_ptr<boost::asio::io_service> io_service) {
@@ -37,6 +41,10 @@ void WorkerThread(boost::shared_ptr<boost::asio::io_service> io_service) {
 }
 
 int main(int argc, char *argv[]) {
+#ifdef USE_SSL
+  std::cout << "Using secure TCP" << std::endl << std::endl;
+#endif // USE_SSL
+
   try {
     if (argc < 3) {
       std::cout << "Usage: client <host> <port>" << std::endl;
@@ -54,10 +62,17 @@ int main(int argc, char *argv[]) {
     }
     boost::this_thread::sleep(boost::posix_time::milliseconds(100));
     mux.lock();
-    std::cout << std::endl << std::endl;
+    std::cout << std::endl;
     mux.unlock();
-
+    
+#ifndef USE_SSL // don't USE_SSL
     client c(io_service, argv[1], std::atoi(argv[2]));
+#else // USE_SSL
+    boost::asio::ssl::context ctx(boost::asio::ssl::context::sslv23);
+    ctx.load_verify_file("certificate.pem");
+
+    client c(io_service, argv[1], std::atoi(argv[2]), ctx);
+#endif // USE_SSL
 
     worker_threads.join_all();
   } catch (std::exception &e) {

@@ -2,7 +2,6 @@
 #include <cstdlib>
 #include <iostream>
 #include <boost/asio.hpp>
-#include <boost/asio/ssl.hpp>
 #include <boost/bind.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/thread.hpp>
@@ -45,6 +44,10 @@ void WorkerThread(boost::shared_ptr<boost::asio::io_service> io_service) {
 }
 
 int main(int argc, char *argv[]) {
+#ifdef USE_SSL
+  std::cout << "Using secure TCP" << std::endl << std::endl;
+#endif // USE_SSL
+
   try {
     if (argc != 2) {
       std::cerr << "Usage: server <port>\n";
