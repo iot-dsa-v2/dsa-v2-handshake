@@ -43,6 +43,15 @@ void server::session::start() {
                   boost::asio::placeholders::bytes_transferred));
 }
 
+void checking(const char *message, bool saving = false) {
+  std::cout << (saving ? "saving " : "checking ");
+  int i = 0;
+  while (message[i] != '\0')
+    std::cout << message[i++];
+  while ((saving ? 7 : 9) + (i++) < 30)
+    std::cout << '.';
+}
+
 void server::session::f0_received(const boost::system::error_code &err,
                                   size_t bytes_transferred) {
   if (err) {
@@ -56,15 +65,6 @@ void server::session::f0_received(const boost::system::error_code &err,
     std::cout << "f0 received, " << bytes_transferred << " bytes transferred"
               << std::endl;
     mux.unlock();
-
-    auto checking = [](const char *d, bool saving = false) {
-      std::cout << (saving ? "saving " : "checking ");
-      int i = 0;
-      while (d[i] != '\0')
-        std::cout << d[i++];
-      while ((saving ? 7 : 9) + (i++) < 30)
-        std::cout << '.';
-    };
 
     byte *cur = read_buf;
 
@@ -205,7 +205,7 @@ void server::session::f1_sent(const boost::system::error_code &error,
               << std::endl;
     mux.unlock();
 
-    static const auto wait_for_secret =
+    const auto wait_for_secret =
         [&](const boost::system::error_code &error, size_t bytes_transferred) {
           strand.post(boost::bind(&server::session::f2_received, this, error,
                                   bytes_transferred));
@@ -229,15 +229,6 @@ void server::session::f2_received(const boost::system::error_code &error,
     std::cout << "f2 received, " << bytes_transferred << " bytes transferred"
               << std::endl;
     mux.unlock();
-
-    auto checking = [](const char *d, bool saving = false) {
-      std::cout << (saving ? "saving " : "checking ");
-      int i = 0;
-      while (d[i] != '\0')
-        std::cout << d[i++];
-      while ((saving ? 7 : 9) + (i++) < 30)
-        std::cout << '.';
-    };
 
     byte *cur = read_buf;
 
@@ -342,8 +333,6 @@ void server::session::f3_sent(const boost::system::error_code &error,
 
 void server::session::read_loop(const boost::system::error_code &error,
                                 size_t bytes_transferred) {
-  static int count = 0;
-  std::cout << "read loop " << count++ << std::endl;
   if (!error) {
     sock.async_read_some(
         boost::asio::buffer(read_buf, max_length),
