@@ -391,7 +391,7 @@ void server::session::read_loop(const boost::system::error_code &error,
  */
 int server::session::load_f1() {
   if (serv.dsid.size() + f0_bytes_wo_dsid > max_length)
-    throw("buffer size too small");
+    throw std::runtime_error("buffer size too small");
 
   uint32_t total_size = 0;
 

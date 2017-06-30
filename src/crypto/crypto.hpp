@@ -6,6 +6,7 @@
 #include <iostream>
 #include <openssl/ec.h>
 #include <openssl/evp.h>
+#include <openssl/hmac.h>
 
 typedef unsigned char byte;
 
@@ -28,8 +29,17 @@ namespace dsa {
 
   class hash {
   private:
-    EVP_MD_CTX *mdctx;
+    EVP_MD_CTX mdctx;
     bool finalized;
+
+    // hack-ish static initialization 
+    class Init {
+    public:
+      Init() {
+        OpenSSL_add_all_digests();
+      }
+    };
+    Init init;
 
   public:
     hash(const char *hash_type);
@@ -41,7 +51,8 @@ namespace dsa {
 
   class hmac {
   private:
-    HMAC_CTX *ctx;
+    // HMAC_CTX *ctx;
+    HMAC_CTX ctx;
     bool initialized;
 
   public:

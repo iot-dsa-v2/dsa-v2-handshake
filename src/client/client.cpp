@@ -402,7 +402,7 @@ void load_LE(byte *buf, void *data, int len) {
  */
 int client::load_f0() {
   if (dsid.size() + f0_bytes_wo_dsid > max_length)
-    throw("buffer size too small");
+    throw std::runtime_error("buffer size too small");
 
   uint32_t total_size = 0;
 

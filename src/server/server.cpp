@@ -25,6 +25,7 @@ server::server(boost::shared_ptr<boost::asio::io_service> io_service,
                                 boost::asio::ip::tcp::v4(), port)) {
   ecdh.set_private_key_hex(
       "e4c386d0427062374f22545ea926fd94319220a6a71bfa9c126ed96045a8ca1e");
+
   dsa::hash hash("sha256");
 
   public_key = ecdh.get_public_key();

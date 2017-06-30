@@ -2,12 +2,13 @@
 #define SERVER_COMMON_HPP
 
 #include <array>
+#include <string>
+#include <vector>
 #include <boost/asio.hpp>
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/thread/mutex.hpp>
-#include <string>
-#include <vector>
+#include <openssl/hmac.h>
 
 #include "crypto.hpp"
 

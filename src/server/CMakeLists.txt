@@ -6,7 +6,11 @@ set(CMAKE_CXX_STANDARD 11)
 find_package(Threads)
 set(EXTRA_LIBS ${EXTRA_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 
-# set(BOOST_ROOT "/usr/local/Cellar/boost/1.64.0_1")
+set(OPENSSL_ROOT_DIR "/usr/local/Cellar/openssl/1.0.2l")
+find_package(OpenSSL REQUIRED)
+include_directories(${OPENSSL_INCLUDE_DIR})
+set(EXTRA_LIBS ${EXTRA_LIBS} ${OPENSSL_LIBRARIES})
+
 set(BOOST_INCLUDEDIR "/usr/local/Cellar/boost/1.64.0_1/include")
 set(BOOST_LIBRARYDIR "/usr/local/Cellar/boost/1.64.0_1/lib")
 find_package(Boost 1.6 REQUIRED COMPONENTS system thread)
