@@ -3,7 +3,7 @@ project (HandshakeDemo)
 
 set(PROJECT_SOURCE_DIR src)
 
-option(USE_SSL "use secure tcp" ON)
+option(USE_SSL "use secure tcp" OFF)
 
 if (USE_SSL)
   add_definitions(-DUSE_SSL=true)
