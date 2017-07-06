@@ -25,9 +25,7 @@ endif()
 
 find_package(Boost 1.6 REQUIRED COMPONENTS system thread date_time)
 
-if (UNIX)
-  include_directories(${Boost_INCLUDE_DIRS})
-endif()
+include_directories(${Boost_INCLUDE_DIRS})
 set(EXTRA_LIBS ${EXTRA_LIBS} ${Boost_LIBRARIES})
 
 include_directories(${CMAKE_SOURCE_DIR}/src/crypto)
