@@ -29,10 +29,12 @@ std::string dsa::hash::digest_base64() {
   if (finalized)
     throw std::runtime_error("digest already called");
 
-  unsigned char *md_value = new unsigned char[EVP_MAX_MD_SIZE];
-  unsigned int md_len;
+  byte *md_value = new byte[EVP_MAX_MD_SIZE];
+  uint md_len;
   EVP_DigestFinal_ex(&mdctx, md_value, &md_len);
   finalized = true;
+
+  EVP_MD_CTX_cleanup(&mdctx);
 
   std::string out = base64_encode(md_value, md_len);
   delete[] md_value;
