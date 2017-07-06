@@ -2,11 +2,11 @@
 #define CLIENT_COMMON_HPP
 
 #include <array>
+#include <string>
+#include <vector>
 #include <boost/asio.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/thread/mutex.hpp>
-#include <string>
-#include <vector>
 
 #include "crypto.hpp"
 
@@ -15,8 +15,6 @@
 
 typedef boost::asio::ssl::stream<boost::asio::ip::tcp::socket> ssl_socket;
 #endif // USE_SSL
-
-extern boost::mutex mux;
 
 #ifndef uint
 typedef unsigned int uint;

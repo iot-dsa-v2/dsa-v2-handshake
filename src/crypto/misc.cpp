@@ -1,18 +1,7 @@
 #include "crypto.hpp"
 #include <iostream>
 #include <regex>
-
-// template <typename T>
-// inline std::ostream& operator << (std::ostream& os, const std::vector<T>& v) {
-//   os << "[";
-//   if (v.size() > 0) {
-//     for (int i = 0; i < v.size() - 1; ++i)
-//       os << v[i] << ", ";
-//     os << v[v.size() - 1];
-//   }
-//   os << "]";
-//   return os;  
-// }
+#include <openssl/rand.h>
 
 static const std::string base64_chars = 
              "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -20,16 +9,16 @@ static const std::string base64_chars =
              "0123456789+/";
 
 
-static inline bool is_base64(unsigned char c) {
+static inline bool is_base64(byte c) {
   return (isalnum(c) || (c == '+') || (c == '/'));
 }
 
-std::string dsa::base64_encode(unsigned char const* bytes_to_encode, unsigned int in_len) {
+std::string dsa::base64_encode(byte const* bytes_to_encode, unsigned int in_len) {
   std::string ret;
   int i = 0;
   int j = 0;
-  unsigned char char_array_3[3];
-  unsigned char char_array_4[4];
+  byte char_array_3[3];
+  byte char_array_4[4];
 
   while (in_len--) {
     char_array_3[i++] = *(bytes_to_encode++);
@@ -72,7 +61,7 @@ std::string dsa::base64_decode(std::string const& encoded_string) {
   int i = 0;
   int j = 0;
   int in_ = 0;
-  unsigned char char_array_4[4], char_array_3[3];
+  byte char_array_4[4], char_array_3[3];
   std::string ret;
 
   while (in_len-- && ( encoded_string[in_] != '=') && is_base64(encoded_string[in_])) {
@@ -128,11 +117,20 @@ int char2int(char input)
   throw std::invalid_argument("Invalid input string");
 }
 
-std::vector<unsigned char> dsa::hex2bin(const char* src) {
-  std::vector<unsigned char> out;
+std::vector<byte> dsa::hex2bin(const char* src) {
+  std::vector<byte> out;
   while(*src && src[1]) {
     out.push_back(char2int(*src)*16 + char2int(src[1]));
     src += 2;
   }
+  return out;
+}
+
+std::vector<byte> dsa::gen_salt(int len) {
+  byte *buf = new byte[len];
+  if (!RAND_bytes(buf, len))
+    throw std::runtime_error("Unable to generate salt");
+  std::vector<byte> out(buf, buf + len);
+  delete[] buf;
   return out;
 }
