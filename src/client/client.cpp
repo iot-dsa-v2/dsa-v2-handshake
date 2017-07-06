@@ -12,7 +12,8 @@
 
 #define END_IF(X)                                                              \
   if (X) {                                                                     \
-    std::cout << "fail" << std::endl;                                          \
+    ss << "fail" << std::endl;                                                 \
+    std::cout << ss.str();                                                     \
     return;                                                                    \
   }
 
@@ -35,15 +36,12 @@ client::client(boost::shared_ptr<boost::asio::io_service> io_service,
 
   token = "sample_token_string";
 
-  ecdh.set_private_key_hex(
-      "e452e1d89dcd16e1ad31336c77f8eace1b1884c06c621aefb7670d47fe54d1f7");
   dsa::hash hash("sha256");
   public_key = ecdh.get_public_key();
   hash.update(public_key);
   dsid = "mlink-" + dsa::base64url(hash.digest_base64());
 
-  salt = dsa::hex2bin(
-      "c4ca4238a0b923820dcc509a6f75849bc81e728d9d4c2f636f067f89cc14862c");
+  salt = dsa::gen_salt(32);
 
   boost::asio::ip::tcp::resolver resolver(*io_service);
   boost::asio::ip::tcp::resolver::query query(
@@ -76,7 +74,9 @@ bool client::verify_certificate(bool preverified,
   char subject_name[256];
   X509 *cert = X509_STORE_CTX_get_current_cert(ctx.native_handle());
   X509_NAME_oneline(X509_get_subject_name(cert), subject_name, 256);
-  std::cout << "Verifying " << subject_name << std::endl << std::endl;
+  std::stringstream ss;
+  ss << "Verifying " << subject_name << std::endl << std::endl;
+  std::cout << ss.str();
 
   return preverified;
 }
@@ -86,16 +86,18 @@ void client::handle_ssl_handshake(const boost::system::error_code &err) {
     sock.async_handshake(boost::asio::ssl::stream_base::client,
         boost::bind(&client::start_handshake, this, boost::asio::placeholders::error));
   } else {
-    std::cout << "Error: " << err << std::endl;
+    std::stringstream ss;
+    ss << "Error: " << err << std::endl;
+    std::cout << ss.str();
   }
 }
 #endif // USE_SSL
 
 void client::start_handshake(const boost::system::error_code &err) {
   if (err) {
-    mux.lock();
-    std::cerr << "[client::start_handshake] Error: " << err << std::endl;
-    mux.unlock();
+    std::stringstream ss;
+    ss << "[client::start_handshake] Error: " << err << std::endl;
+    std::cerr << ss.str();
   } else {
     int size = load_f0();
     boost::asio::async_write(
@@ -105,17 +107,26 @@ void client::start_handshake(const boost::system::error_code &err) {
   }
 }
 
+void checking(std::stringstream &ss, const char *message, bool saving = false) {
+  ss << (saving ? "saving " : "checking ");
+  int i = 0;
+  while (message[i] != '\0')
+    ss << message[i++];
+  while ((saving ? 7 : 9) + (i++) < 30)
+    ss << '.';
+}
+
 void client::f0_sent(const boost::system::error_code &err,
                      size_t bytes_transferred) {
   if (err) {
-    mux.lock();
-    std::cerr << "[clien::f0_sent] Error: " << err << std::endl;
-    mux.unlock();
+    std::stringstream ss;
+    ss << "[clien::f0_sent] Error: " << err << std::endl;
+    std::cerr << ss.str();
   } else {
-    mux.lock();
+    std::stringstream ss;
     std::cout << "f0 sent, " << bytes_transferred << " bytes transferred"
               << std::endl;
-    mux.unlock();
+    std::cout << ss.str();
     sock.async_read_some(
         boost::asio::buffer(read_buf, max_length),
         boost::bind(&client::f1_received, this,
@@ -127,107 +138,84 @@ void client::f0_sent(const boost::system::error_code &err,
 void client::f1_received(const boost::system::error_code &err,
                          size_t bytes_transferred) {
   if (err) {
-    mux.lock();
-    std::cerr << "[client::f1_received] Error: " << err << std::endl;
-    mux.unlock();
+    std::stringstream ss;
+    ss << "[client::f1_received] Error: " << err << std::endl;
+    std::cerr << ss.str();
   } else {
-    mux.lock();
+    std::stringstream ss;
     std::cout << std::endl;
     std::cout << "f1 received, " << bytes_transferred << " bytes transferred"
               << std::endl;
-    mux.unlock();
-
-    auto checking = [](const char *d, bool saving = false) {
-      std::cout << (saving ? "saving " : "checking ");
-      int i = 0;
-      while (d[i] != '\0')
-        std::cout << d[i++];
-      while ((saving ? 7 : 9) + (i++) < 30)
-        std::cout << '.';
-    };
 
     byte *cur = read_buf;
 
-    auto debug = [&]() {
-      std::cout << (uint) * (cur + 0) << std::endl;
-      std::cout << (uint) * (cur + 1) << std::endl;
-      std::cout << (uint) * (cur + 2) << std::endl;
-      for (int i = 0; i < bytes_transferred; ++i) {
-        if ((uint)read_buf[i] < 0x10)
-          std::cout << 0;
-        // std::cout << std::hex << (uint)buf[i];
-      }
-      std::cout << std::endl;
-      for (byte *ptr = read_buf; ptr < cur; ptr++)
-        std::cout << "  ";
-      std::cout << "^" << std::endl;
-    };
-
     /* check to make sure message size matches */
-    checking("message size");
+    checking(ss, "message size");
     uint32_t message_size;
     std::memcpy(&message_size, cur, sizeof(message_size));
     END_IF(message_size != bytes_transferred);
     cur += sizeof(message_size);
-    std::cout << message_size << std::endl;
+    ss << message_size << std::endl;
 
     /* check to make sure header length is correct */
-    checking("header length");
+    checking(ss, "header length");
     uint16_t header_size;
     std::memcpy(&header_size, cur, sizeof(header_size));
     END_IF(header_size != 11);
     cur += sizeof(header_size);
-    std::cout << header_size << std::endl;
+    ss << header_size << std::endl;
 
     /* check to make sure message type is correct */
-    checking("message type");
+    checking(ss, "message type");
     byte message_type;
     std::memcpy(&message_type, cur, sizeof(message_size));
     END_IF(message_type != 0xf1);
     cur += 1;
-    std::cout << std::hex << (uint)message_type << std::dec << std::endl;
+    ss << std::hex << (uint)message_type << std::dec << std::endl;
 
     /* check to make sure request id is correct */
-    checking("request id");
+    checking(ss, "request id");
     uint32_t request_id;
     std::memcpy(&request_id, cur, sizeof(request_id));
     END_IF(request_id != 0);
     cur += sizeof(request_id);
-    std::cout << request_id << std::endl;
+    ss << request_id << std::endl;
 
     /* check DSID length */
-    checking("DSID length");
+    checking(ss, "DSID length");
     byte dsid_length;
     std::memcpy(&dsid_length, cur, sizeof(dsid_length));
     END_IF(dsid_length > 60 || dsid_length < 20);
     cur += sizeof(dsid_length);
-    std::cout << (uint)dsid_length << std::endl;
+    ss << (uint)dsid_length << std::endl;
 
     /* save DSID */
-    checking("broker DSID", true);
+    checking(ss, "broker DSID", true);
     byte new_dsid[1000];
     std::memcpy(new_dsid, cur, dsid_length);
     cur += dsid_length;
     broker_dsid.assign(new_dsid, new_dsid + dsid_length);
     // END_IF(cur > buf + message_size);
-    std::cout << "done" << std::endl;
+    ss << "done" << std::endl;
 
     /* save public key */
-    checking("broker public key", true);
+    checking(ss, "broker public key", true);
     byte tmp_pub[65];
     std::memcpy(tmp_pub, cur, sizeof(tmp_pub));
     cur += sizeof(tmp_pub);
     broker_public.assign(tmp_pub, tmp_pub + sizeof(tmp_pub));
-    std::cout << "done" << std::endl;
+    ss << "done" << std::endl;
 
     /* save broker salt */
-    checking("broker salt", true);
+    checking(ss, "broker salt", true);
     byte tmp_salt[32];
     std::memcpy(tmp_salt, cur, sizeof(tmp_salt));
     cur += sizeof(broker_salt);
     broker_salt.assign(tmp_salt, tmp_salt + sizeof(tmp_salt));
     // END_IF(cur != buf + message_size);
-    std::cout << "done" << std::endl;
+    ss << "done" << std::endl;
+
+    std::cout << ss.str();
 
     static const auto wait_for_secret = [&]() {
       int f2_size = load_f2();
@@ -259,14 +247,14 @@ void client::f2_sent(const boost::system::error_code &err,
                      size_t bytes_transferred) {
   std::cout << std::endl;
   if (err) {
-    mux.lock();
-    std::cerr << "[clien::f2_sent] Error: " << err << std::endl;
-    mux.unlock();
+    std::stringstream ss;
+    ss << "[clien::f2_sent] Error: " << err << std::endl;
+    std::cerr << ss.str();
   } else {
-    mux.lock();
-    std::cout << "f2 sent, " << bytes_transferred << " bytes transferred"
+    std::stringstream ss;
+    ss << "f2 sent, " << bytes_transferred << " bytes transferred"
               << std::endl;
-    mux.unlock();
+    std::cout << ss.str();
     sock.async_read_some(
         boost::asio::buffer(read_buf, max_length),
         boost::bind(&client::f3_received, this,
@@ -279,95 +267,87 @@ void client::f3_received(const boost::system::error_code &err,
                          size_t bytes_transferred) {
   std::cout << std::endl;
   if (err) {
-    mux.lock();
-    std::cerr << "[clien::f3_received] Error: " << err << std::endl;
-    mux.unlock();
+    std::stringstream ss;
+    ss << "[clien::f3_received] Error: " << err << std::endl;
+    std::cerr << ss.str();
   } else {
-    mux.lock();
-    std::cout << "f3 received, " << bytes_transferred << " bytes transferred"
+    std::stringstream ss;
+    ss << "f3 received, " << bytes_transferred << " bytes transferred"
               << std::endl;
-    mux.unlock();
-
-    auto checking = [](const char *d, bool saving = false) {
-      std::cout << (saving ? "saving " : "checking ");
-      int i = 0;
-      while (d[i] != '\0')
-        std::cout << d[i++];
-      while ((saving ? 7 : 9) + (i++) < 30)
-        std::cout << '.';
-    };
 
     byte *cur = read_buf;
 
     /* check to make sure message size matches */
-    checking("message size");
+    checking(ss, "message size");
     uint32_t message_size;
     std::memcpy(&message_size, cur, sizeof(message_size));
     END_IF(message_size != bytes_transferred);
     cur += sizeof(message_size);
-    std::cout << message_size << std::endl;
+    ss << message_size << std::endl;
 
     /* check to make sure header length is correct */
-    checking("header length");
+    checking(ss, "header length");
     uint16_t header_size;
     std::memcpy(&header_size, cur, sizeof(header_size));
     END_IF(header_size != 11);
     cur += sizeof(header_size);
-    std::cout << header_size << std::endl;
+    ss << header_size << std::endl;
 
     /* check to make sure message type is correct */
-    checking("message type");
+    checking(ss, "message type");
     byte message_type;
     std::memcpy(&message_type, cur, sizeof(message_size));
     END_IF(message_type != 0xf3);
     cur += sizeof(message_type);
-    std::cout << std::hex << (uint)message_type << std::dec << std::endl;
+    ss << std::hex << (uint)message_type << std::dec << std::endl;
 
     /* check to make sure request id is correct */
-    checking("request id");
+    checking(ss, "request id");
     uint32_t request_id;
     std::memcpy(&request_id, cur, sizeof(request_id));
     END_IF(request_id != 0);
     cur += sizeof(request_id);
-    std::cout << request_id << std::endl;
+    ss << request_id << std::endl;
 
     /* check session id length */
-    checking("session id length");
+    checking(ss, "session id length");
     uint16_t session_id_length;
     std::memcpy(&session_id_length, cur, sizeof(session_id_length));
     cur += sizeof(session_id_length);
-    std::cout << session_id_length << std::endl;
+    ss << session_id_length << std::endl;
 
     /* save session id */
-    checking("session id", true);
+    checking(ss, "session id", true);
     byte session[1000];
     std::memcpy(session, cur, session_id_length);
     cur += session_id_length;
     session_id.assign(session, session + session_id_length);
-    std::cout << "done" << std::endl;
+    ss << "done" << std::endl;
 
     /* check path length */
-    checking("path length");
+    checking(ss, "path length");
     uint16_t path_length;
     std::memcpy(&path_length, cur, sizeof(path_length));
     cur += sizeof(path_length);
-    std::cout << path_length << std::endl;
+    ss << path_length << std::endl;
 
     /* save path */
-    checking("path", true);
+    checking(ss, "path", true);
     byte tmp_path[1000];
     std::memcpy(tmp_path, cur, path_length);
     cur += path_length;
     path.assign(tmp_path, tmp_path + path_length);
-    std::cout << "done" << std::endl;
+    ss << "done" << std::endl;
 
     /* check broker auth */
-    checking("broker auth");
+    checking(ss, "broker auth");
     for (int i = 0; i < 32; ++i)
       END_IF(*(cur++) != broker_auth[i]);
-    std::cout << "done" << std::endl;
+    ss << "done" << std::endl;
 
-    std::cout << std::endl << "HANDSHAKE SUCCESSFUL" << std::endl;
+    ss << std::endl << "HANDSHAKE SUCCESSFUL" << std::endl;
+
+    std::cout << ss.str();
   }
 }
 
@@ -446,7 +426,7 @@ int client::load_f0() {
   // std::string salt = dsa::gen_salt(32);
   for (byte c : salt)
     write_buf[total_size++] = c;
-  // std::cout << (uint32_t)salt[31] << std::endl;
+  // ss << (uint32_t)salt[31] << std::endl;
 
   /* write total length */
   std::memcpy(write_buf, &total_size, sizeof(total_size));
@@ -502,14 +482,14 @@ int client::load_f2() {
   /* write total length */
   std::memcpy(write_buf, &total, sizeof(total));
 
-  // mux.lock();
+  // std::stringstream ss;
   // for (int i = 0; i < total; ++i) {
   //   if (write_buf[i] < 0x10)
-  //     std::cout << 0;
-  //   std::cout << std::hex << (uint)write_buf[i];
+  //     ss << 0;
+  //   ss << std::hex << (uint)write_buf[i];
   // }
-  // std::cout << std::dec << std::endl;
-  // mux.unlock();
+  // ss << std::dec << std::endl;
+  // ss << ss.str();
 
   return total;
 }

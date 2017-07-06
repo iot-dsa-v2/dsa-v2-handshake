@@ -10,34 +10,38 @@
 #include <boost/asio/ssl.hpp>
 #endif // USE_SSL
 
-boost::mutex mux;
-
 void WorkerThread(boost::shared_ptr<boost::asio::io_service> io_service) {
-  mux.lock();
-  std::cout << "[" << boost::this_thread::get_id() << "] Worker start"
+  std::stringstream ss;
+  ss << "[" << boost::this_thread::get_id() << "] Worker start"
             << std::endl;
-  mux.unlock();
+  std::cout << ss.str();
 
   while (true) {
     try {
       boost::system::error_code err;
+
       io_service->run(err);
 
       if (err) {
-        mux.lock();
-        std::cerr << "[" << boost::this_thread::get_id()
-                  << "] Error: " << std::endl;
-        mux.unlock();
+        ss.clear();
+        ss << "[" << boost::this_thread::get_id() << "] Error: " << err
+                  << std::endl;
+        std::cout << ss.str();
       } else {
         return;
       }
     } catch (std::exception &e) {
-      mux.lock();
-      std::cerr << "[" << boost::this_thread::get_id()
+      ss.clear();
+      ss << "[" << boost::this_thread::get_id()
                 << "] Exception: " << e.what() << std::endl;
-      mux.unlock();
+      std::cout << ss.str();
     }
   }
+
+  ss.clear();
+  ss << "[" << boost::this_thread::get_id() << "] Worker stop"
+            << std::endl;
+  std::cout << ss.str();
 }
 
 int main(int argc, char *argv[]) {
@@ -60,10 +64,8 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < 5; ++i) {
       worker_threads.create_thread(boost::bind(WorkerThread, io_service));
     }
-    boost::this_thread::sleep(boost::posix_time::milliseconds(100));
-    mux.lock();
+    boost::this_thread::sleep(boost::posix_time::milliseconds(50));
     std::cout << std::endl;
-    mux.unlock();
     
 #ifndef USE_SSL // don't USE_SSL
     client c(io_service, argv[1], std::atoi(argv[2]));
@@ -76,9 +78,7 @@ int main(int argc, char *argv[]) {
 
     worker_threads.join_all();
   } catch (std::exception &e) {
-    mux.lock();
     std::cerr << "[main] Exception: " << e.what() << std::endl;
-    mux.unlock();
   }
 
   return 0;

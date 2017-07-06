@@ -5,7 +5,6 @@
 #include <iostream>
 #include <vector>
 #include <openssl/evp.h>
-#include <openssl/rand.h>
 
 dsa::hash::hash(const char *hash_type) : finalized(false) {
   const EVP_MD *md = EVP_get_digestbyname(hash_type);
@@ -38,16 +37,6 @@ std::string dsa::hash::digest_base64() {
 
   std::string out = base64_encode(md_value, md_len);
   delete[] md_value;
-  return out;
-}
-
-std::string dsa::gen_salt(int len) {
-  byte *buf = new byte[len];
-  if (!RAND_bytes(buf, len))
-    throw std::runtime_error("Unable to generate salt");
-  std::string out = reinterpret_cast<char *>(buf);
-  out[len] = '\0';
-  delete[] buf;
   return out;
 }
 

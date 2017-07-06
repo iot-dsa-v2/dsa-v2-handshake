@@ -2,12 +2,12 @@
 #define SERVER_COMMON_HPP
 
 #include <array>
+#include <atomic>
 #include <string>
 #include <vector>
 #include <boost/asio.hpp>
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/shared_ptr.hpp>
-#include <boost/thread/mutex.hpp>
 #include <openssl/hmac.h>
 
 #include "crypto.hpp"
@@ -17,8 +17,6 @@
 
 typedef boost::asio::ssl::stream<boost::asio::ip::tcp::socket> ssl_socket;
 #endif // USE_SSL
-
-extern boost::mutex mux;
 
 #ifndef uint
 typedef unsigned int uint;
@@ -36,6 +34,8 @@ private:
 
   std::string get_password() const;
 #endif // USE_SSL
+
+  std::atomic_int session_count;
 
   class session : public boost::enable_shared_from_this<session> {
   private:
@@ -116,6 +116,8 @@ public:
                      const boost::system::error_code &error);
 
   void end_session(session *s);
+
+  int get_session_id();
 };
 
 #endif // SERVER_COMMON_HPP

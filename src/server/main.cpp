@@ -5,15 +5,12 @@
 #include <boost/bind.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/thread.hpp>
-#include <boost/thread/mutex.hpp>
-
-boost::mutex mux;
 
 void WorkerThread(boost::shared_ptr<boost::asio::io_service> io_service) {
-  mux.lock();
-  std::cout << "[" << boost::this_thread::get_id() << "] Worker start"
+  std::stringstream ss;
+  ss << "[" << boost::this_thread::get_id() << "] Worker start"
             << std::endl;
-  mux.unlock();
+  std::cout << ss.str();
 
   while (true) {
     try {
@@ -22,25 +19,25 @@ void WorkerThread(boost::shared_ptr<boost::asio::io_service> io_service) {
       io_service->run(err);
 
       if (err) {
-        mux.lock();
-        std::cerr << "[" << boost::this_thread::get_id() << "] Error: " << err
+        ss.clear();
+        ss << "[" << boost::this_thread::get_id() << "] Error: " << err
                   << std::endl;
-        mux.unlock();
+        std::cout << ss.str();
       } else {
         return;
       }
     } catch (std::exception &e) {
-      mux.lock();
-      std::cerr << "[" << boost::this_thread::get_id()
+      ss.clear();
+      ss << "[" << boost::this_thread::get_id()
                 << "] Exception: " << e.what() << std::endl;
-      mux.unlock();
+      std::cout << ss.str();
     }
   }
 
-  mux.lock();
-  std::cout << "[" << boost::this_thread::get_id() << "] Worker stop"
+  ss.clear();
+  ss << "[" << boost::this_thread::get_id() << "] Worker stop"
             << std::endl;
-  mux.unlock();
+  std::cout << ss.str();
 }
 
 int main(int argc, char *argv[]) {
