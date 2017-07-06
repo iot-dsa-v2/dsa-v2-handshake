@@ -6,15 +6,28 @@ set(CMAKE_CXX_STANDARD 11)
 find_package(Threads)
 set(EXTRA_LIBS ${EXTRA_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 
-# set(OPENSSL_ROOT_DIR "/usr/local/Cellar/openssl/1.0.2l")
+if (UNIX)
+  set(OPENSSL_ROOT_DIR "/usr/local/Cellar/openssl/1.0.2l")
+endif()
+
 find_package(OpenSSL REQUIRED)
-# include_directories(${OPENSSL_INCLUDE_DIR})
+
+if (UNIX)
+  include_directories(${OPENSSL_INCLUDE_DIR})
+endif()
+
 set(EXTRA_LIBS ${EXTRA_LIBS} ${OPENSSL_LIBRARIES})
 
-# set(BOOST_INCLUDEDIR "/usr/local/Cellar/boost/1.64.0_1/include")
-# set(BOOST_LIBRARYDIR "/usr/local/Cellar/boost/1.64.0_1/lib")
+if (UNIX)
+  set(BOOST_INCLUDEDIR "/usr/local/Cellar/boost/1.64.0_1/include")
+  set(BOOST_LIBRARYDIR "/usr/local/Cellar/boost/1.64.0_1/lib")
+endif()
+
 find_package(Boost 1.6 REQUIRED COMPONENTS system thread date_time)
-include_directories(${Boost_INCLUDE_DIRS})
+
+if (UNIX)
+  include_directories(${Boost_INCLUDE_DIRS})
+endif()
 set(EXTRA_LIBS ${EXTRA_LIBS} ${Boost_LIBRARIES})
 
 include_directories(${CMAKE_SOURCE_DIR}/src/crypto)

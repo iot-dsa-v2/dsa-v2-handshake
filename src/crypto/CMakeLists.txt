@@ -1,4 +1,6 @@
-# set(OPENSSL_ROOT_DIR "/usr/local/Cellar/openssl/1.0.2l")
+if (UNIX)
+  set(OPENSSL_ROOT_DIR "/usr/local/Cellar/openssl/1.0.2l")
+endif()
 
 set(CMAKE_CXX_STANDARD 11)
 
