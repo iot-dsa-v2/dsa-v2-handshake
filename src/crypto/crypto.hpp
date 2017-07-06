@@ -10,6 +10,10 @@
 
 typedef unsigned char byte;
 
+#ifndef uint
+typedef unsigned int uint;
+#endif
+
 namespace dsa {
   class ecdh {
   private:
