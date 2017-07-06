@@ -181,11 +181,11 @@ void client::f1_received(const boost::system::error_code &err,
 
     /* check to make sure message type is correct */
     checking("message type");
-    uint8_t message_type;
-    std::memcpy(&message_type, cur, sizeof(message_size));
-    END_IF(message_type != 0xf1);
-    cur += sizeof(message_type);
-    std::cout << std::hex << (uint)message_type << std::dec << std::endl;
+    // byte message_type;
+    // std::memcpy(&message_type, cur, sizeof(message_size));
+    // END_IF(message_type != 0xf1);
+    cur += 1;
+    //std::cout << std::hex << (uint)message_type << std::dec << std::endl;
 
     /* check to make sure request id is correct */
     checking("request id");
@@ -205,10 +205,10 @@ void client::f1_received(const boost::system::error_code &err,
 
     /* save DSID */
     checking("broker DSID", true);
-    byte new_dsid[dsid_length];
-    std::memcpy(new_dsid, cur, sizeof(new_dsid) - 1);
-    cur += sizeof(new_dsid);
-    broker_dsid.assign(new_dsid, new_dsid + sizeof(new_dsid));
+    byte new_dsid[1000];
+    std::memcpy(new_dsid, cur, dsid_length);
+    cur += dsid_length;
+    broker_dsid.assign(new_dsid, new_dsid + dsid_length);
     // END_IF(cur > buf + message_size);
     std::cout << "done" << std::endl;
 
@@ -317,7 +317,7 @@ void client::f3_received(const boost::system::error_code &err,
 
     /* check to make sure message type is correct */
     checking("message type");
-    uint8_t message_type;
+    byte message_type;
     std::memcpy(&message_type, cur, sizeof(message_size));
     END_IF(message_type != 0xf3);
     cur += sizeof(message_type);
@@ -340,7 +340,7 @@ void client::f3_received(const boost::system::error_code &err,
 
     /* save session id */
     checking("session id", true);
-    byte session[session_id_length];
+    byte session[1000];
     std::memcpy(session, cur, session_id_length);
     cur += session_id_length;
     session_id.assign(session, session + session_id_length);
@@ -355,7 +355,7 @@ void client::f3_received(const boost::system::error_code &err,
 
     /* save path */
     checking("path", true);
-    byte tmp_path[path_length];
+    byte tmp_path[1000];
     std::memcpy(tmp_path, cur, path_length);
     cur += path_length;
     path.assign(tmp_path, tmp_path + path_length);

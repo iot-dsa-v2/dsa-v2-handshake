@@ -1,4 +1,7 @@
-set(OPENSSL_ROOT_DIR "/usr/local/Cellar/openssl/1.0.2l")
+# set(OPENSSL_ROOT_DIR "/usr/local/Cellar/openssl/1.0.2l")
+
+set(CMAKE_CXX_STANDARD 11)
+
 find_package(OpenSSL REQUIRED)
 include_directories(${OPENSSL_INCLUDE_DIR})
 set(EXTRA_LIBS ${EXTRA_LIBS} ${OPENSSL_LIBRARIES})

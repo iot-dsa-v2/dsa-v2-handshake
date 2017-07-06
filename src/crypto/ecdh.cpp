@@ -33,10 +33,12 @@ std::vector<byte> dsa::ecdh::get_private_key() {
   if (priv == nullptr)
     throw std::runtime_error("private key not set");
   int size = BN_num_bytes(priv);
-  byte out[size];
-  if (size != BN_bn2bin(priv, out))
+  byte *tmp = new byte[size];
+  if (size != BN_bn2bin(priv, tmp))
     throw std::runtime_error("private key couldn't be retrieved");
-  return std::vector<byte>(out, out + size);
+  std::vector<byte> out(tmp, tmp + size);
+  delete[] tmp;
+  return out;
 }
 
 std::vector<byte> dsa::ecdh::get_public_key() {
@@ -51,13 +53,15 @@ std::vector<byte> dsa::ecdh::get_public_key() {
   if (size == 0)
     throw std::runtime_error("Couldn't get public key");
   
-  byte out[size];
+  byte *tmp = new byte[size];
 
-  int r = EC_POINT_point2oct(group, pub, form, out, size, nullptr);
+  int r = EC_POINT_point2oct(group, pub, form, tmp, size, nullptr);
   if (r != size)
     throw std::runtime_error("Couldn't get public key");
   
-  return std::vector<byte>(out, out + size);
+  std::vector<byte> out(tmp, tmp + size);
+  delete[] tmp;
+  return out;
 }
 
 bool dsa::ecdh::is_key_valid_for_curve(BIGNUM *private_key) {
@@ -121,13 +125,15 @@ std::vector<byte> dsa::ecdh::compute_secret(std::vector<byte> public_key) {
   // NOTE: field_size is in bits
   int field_size = EC_GROUP_get_degree(group);
   size_t out_len = (field_size + 7) / 8;
-  byte out[out_len];
+  byte *tmp = new byte[out_len];
 
-  r = ECDH_compute_key(out, out_len, pub, key, nullptr);
+  r = ECDH_compute_key(tmp, out_len, pub, key, nullptr);
   EC_POINT_free(pub);
   if (!r)
     throw std::runtime_error("secret couldn't be computed with given key");
   
-  return std::vector<byte>(out, out + out_len);
+  std::vector<byte> out(tmp, tmp + out_len);
+  delete[] tmp;
+  return out;
 }
 

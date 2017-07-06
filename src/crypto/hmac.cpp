@@ -37,8 +37,8 @@ std::vector<byte> dsa::hmac::digest() {
   if (!initialized)
     throw std::runtime_error("HMAC needs to be initialized");
 
-  byte md_value[EVP_MAX_MD_SIZE];
-  uint md_len = 0;
+  byte *md_value = new byte[EVP_MAX_MD_SIZE];
+  unsigned int md_len = 0;
 
   bool r = HMAC_Final(&ctx, md_value, &md_len);
   if (!r)
@@ -47,5 +47,6 @@ std::vector<byte> dsa::hmac::digest() {
   // HMAC_CTX_reset(ctx);
 
   std::vector<byte> out(md_value, md_value + md_len);
+  delete[] md_value;
   return out;
 }

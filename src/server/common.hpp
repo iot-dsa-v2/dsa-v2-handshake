@@ -20,6 +20,10 @@ typedef boost::asio::ssl::stream<boost::asio::ip::tcp::socket> ssl_socket;
 
 extern boost::mutex mux;
 
+#ifndef uint
+typedef unsigned int uint;
+#endif
+
 class server {
 private:
   boost::shared_ptr<boost::asio::io_service> io_service;

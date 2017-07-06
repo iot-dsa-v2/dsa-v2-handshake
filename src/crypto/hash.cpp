@@ -40,11 +40,12 @@ std::string dsa::hash::digest_base64() {
 }
 
 std::string dsa::gen_salt(int len) {
-  unsigned char buf[len];
+  byte *buf = new byte[len];
   if (!RAND_bytes(buf, len))
     throw std::runtime_error("Unable to generate salt");
   std::string out = reinterpret_cast<char *>(buf);
   out[len] = '\0';
+  delete[] buf;
   return out;
 }
 

@@ -18,6 +18,10 @@ typedef boost::asio::ssl::stream<boost::asio::ip::tcp::socket> ssl_socket;
 
 extern boost::mutex mux;
 
+#ifndef uint
+typedef unsigned int uint;
+#endif
+
 class client {
   enum { max_length = 2048, f0_bytes_wo_dsid = 112 };
   byte write_buf[max_length];

@@ -165,10 +165,10 @@ void server::session::f0_received(const boost::system::error_code &err,
 
     /* save DSID */
     checking("client DSID", true);
-    byte new_dsid[dsid_length];
-    std::memcpy(new_dsid, cur, sizeof(new_dsid));
-    cur += sizeof(new_dsid);
-    client_dsid = std::vector<byte>(new_dsid, new_dsid + sizeof(new_dsid));
+    byte new_dsid[1000];
+    std::memcpy(new_dsid, cur, dsid_length);
+    cur += dsid_length;
+    client_dsid = std::vector<byte>(new_dsid, new_dsid + dsid_length);
     // END_IF(cur > buf + message_size);
     std::cout << "done" << std::endl;
 
@@ -304,7 +304,7 @@ void server::session::f2_received(const boost::system::error_code &error,
 
     /* save token */
     checking("client token", true);
-    byte token[token_length];
+    byte token[1000];
     std::memcpy(token, cur, token_length);
     // client_token = std::vector<byte>(token, token + token_length);
     cur += token_length;
