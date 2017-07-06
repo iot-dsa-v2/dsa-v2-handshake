@@ -181,11 +181,11 @@ void client::f1_received(const boost::system::error_code &err,
 
     /* check to make sure message type is correct */
     checking("message type");
-    // byte message_type;
-    // std::memcpy(&message_type, cur, sizeof(message_size));
-    // END_IF(message_type != 0xf1);
+    byte message_type;
+    std::memcpy(&message_type, cur, sizeof(message_size));
+    END_IF(message_type != 0xf1);
     cur += 1;
-    //std::cout << std::hex << (uint)message_type << std::dec << std::endl;
+    std::cout << std::hex << (uint)message_type << std::dec << std::endl;
 
     /* check to make sure request id is correct */
     checking("request id");

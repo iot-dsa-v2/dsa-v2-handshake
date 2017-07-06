@@ -44,7 +44,7 @@ std::vector<byte> dsa::hmac::digest() {
   if (!r)
     throw std::runtime_error("Failed to get digest");
   initialized = false;
-  // HMAC_CTX_reset(ctx);
+  HMAC_CTX_cleanup(&ctx);
 
   std::vector<byte> out(md_value, md_value + md_len);
   delete[] md_value;
