@@ -1,4 +1,4 @@
-#include "common.hpp"
+#include "server.hpp"
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
 #include <boost/shared_ptr.hpp>
@@ -13,6 +13,7 @@
 #include <boost/asio/ssl.hpp>
 #endif
 
+#include "session.hpp"
 #include "crypto.hpp"
 
 server::server(boost::shared_ptr<boost::asio::io_service> io_service,

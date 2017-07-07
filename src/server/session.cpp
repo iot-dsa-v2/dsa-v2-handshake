@@ -1,4 +1,4 @@
-#include "common.hpp"
+#include "session.hpp"
 #include <cstring>
 #include <string>
 #include <vector>
@@ -7,6 +7,8 @@
 #include <boost/bind.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/thread.hpp>
+
+#include "server.hpp"
 
 #ifdef USE_SSL
 #include <boost/asio/ssl.hpp>
@@ -21,11 +23,11 @@
   }
 
 #ifdef USE_SSL
-server::session::session(server &s, boost::shared_ptr<boost::asio::io_service> io_service,
+session::session(server &s, boost::shared_ptr<boost::asio::io_service> io_service,
                          boost::asio::ssl::context &context)
     : serv(s), sock(*io_service, context), strand(*io_service) {
 #else  // don't USE_SSL
-server::session::session(server &s,
+session::session(server &s,
                          boost::shared_ptr<boost::asio::io_service> io_service)
     : serv(s), sock(*io_service), strand(*io_service) {
 #endif // USE_SSL
@@ -36,7 +38,7 @@ server::session::session(server &s,
   salt = dsa::gen_salt(32);
 }
 
-server::session::~session() {
+session::~session() {
   sock.close();
 
   std::stringstream ss;
@@ -45,23 +47,23 @@ server::session::~session() {
 }
 
 #ifdef USE_SSL
-void server::session::start() {
+void session::start() {
   sock.async_handshake(boost::asio::ssl::stream_base::server,
-                       boost::bind(&server::session::handle_ssl_handshake,
+                       boost::bind(&session::handle_ssl_handshake,
                                    this, boost::asio::placeholders::error));
 }
 
-void server::session::handle_ssl_handshake(
+void session::handle_ssl_handshake(
     const boost::system::error_code &error) {
   if (!error) {
     sock.async_read_some(
         boost::asio::buffer(read_buf, max_length),
-        boost::bind(&server::session::f0_received, this,
+        boost::bind(&session::f0_received, this,
                     boost::asio::placeholders::error,
                     boost::asio::placeholders::bytes_transferred));
   } else {
     std::stringstream ss;
-    ss  << "[server::session::handle_ssl_handshake] Error: " << error
+    ss  << "[session::handle_ssl_handshake] Error: " << error
               << std::endl;
     std::cout << ss.str();
 
@@ -69,17 +71,17 @@ void server::session::handle_ssl_handshake(
   }
 }
 
-ssl_socket::lowest_layer_type &server::session::socket() { return sock.lowest_layer(); }
+ssl_socket::lowest_layer_type &session::socket() { return sock.lowest_layer(); }
 #else  // don't USE_SSL
-void server::session::start() {
+void session::start() {
   sock.async_read_some(
       boost::asio::buffer(read_buf, max_length),
-      boost::bind(&server::session::f0_received, this,
+      boost::bind(&session::f0_received, this,
                   boost::asio::placeholders::error,
                   boost::asio::placeholders::bytes_transferred));
 }
 
-boost::asio::ip::tcp::socket &server::session::socket() { return sock; }
+boost::asio::ip::tcp::socket &session::socket() { return sock; }
 #endif // USE_SSL
 
 void checking(std::stringstream &ss, const char *message, bool saving = false) {
@@ -91,7 +93,7 @@ void checking(std::stringstream &ss, const char *message, bool saving = false) {
     ss << '.';
 }
 
-void server::session::f0_received(const boost::system::error_code &err,
+void session::f0_received(const boost::system::error_code &err,
                                   size_t bytes_transferred) {
   if (err) {
     std::stringstream ss;
@@ -126,7 +128,7 @@ void server::session::f0_received(const boost::system::error_code &err,
     /* check to make sure message type is correct */
     checking(ss, "message type");
     uint8_t message_type;
-    std::memcpy(&message_type, cur, sizeof(message_size));
+    std::memcpy(&message_type, cur, sizeof(message_type));
     END_IF(message_type != 0xf0);
     cur += sizeof(message_type);
     ss << std::hex << (uint)message_type << std::dec << std::endl;
@@ -195,13 +197,13 @@ void server::session::f0_received(const boost::system::error_code &err,
     int f1_size = load_f1();
     boost::asio::async_write(
         sock, boost::asio::buffer(write_buf, f1_size),
-        boost::bind(&server::session::f1_sent, this,
+        boost::bind(&session::f1_sent, this,
                     boost::asio::placeholders::error,
                     boost::asio::placeholders::bytes_transferred));
   }
 }
 
-void server::session::compute_secret() {
+void session::compute_secret() {
   shared_secret = serv.ecdh.compute_secret(client_public);
 
   /* compute broker auth */
@@ -215,11 +217,11 @@ void server::session::compute_secret() {
   client_auth = client_hmac.digest();
 }
 
-void server::session::f1_sent(const boost::system::error_code &error,
+void session::f1_sent(const boost::system::error_code &error,
                               size_t bytes_transferred) {
   if (error) {
     std::stringstream ss;
-    ss << "[server::session::f1_sent] Error: " << error << std::endl;
+    ss << "[session::f1_sent] Error: " << error << std::endl;
     std::cerr << ss.str();
 
     serv.end_session(this);
@@ -231,7 +233,7 @@ void server::session::f1_sent(const boost::system::error_code &error,
 
     const auto wait_for_secret = [&](const boost::system::error_code &error,
                                      size_t bytes_transferred) {
-      strand.post(boost::bind(&server::session::f2_received, this, error,
+      strand.post(boost::bind(&session::f2_received, this, error,
                               bytes_transferred));
     };
     sock.async_read_some(
@@ -241,12 +243,12 @@ void server::session::f1_sent(const boost::system::error_code &error,
   }
 }
 
-void server::session::f2_received(const boost::system::error_code &error,
+void session::f2_received(const boost::system::error_code &error,
                                   size_t bytes_transferred) {
   std::cout << std::endl;
   if (error) {
     std::stringstream ss;
-    ss << "[server::session::f2_received] Error: " << error << std::endl;
+    ss << "[session::f2_received] Error: " << error << std::endl;
     std::cerr << ss.str();
   } else {
     std::stringstream ss;
@@ -274,7 +276,7 @@ void server::session::f2_received(const boost::system::error_code &error,
     /* check to make sure message type is correct */
     checking(ss, "message type");
     uint8_t message_type;
-    std::memcpy(&message_type, cur, sizeof(message_size));
+    std::memcpy(&message_type, cur, sizeof(message_type));
     END_IF(message_type != 0xf2);
     cur += sizeof(message_type);
     ss << std::hex << (uint)message_type << std::dec << std::endl;
@@ -327,17 +329,17 @@ void server::session::f2_received(const boost::system::error_code &error,
     int size = load_f3();
     boost::asio::async_write(
         sock, boost::asio::buffer(write_buf, size),
-        boost::bind(&server::session::f3_sent, this,
+        boost::bind(&session::f3_sent, this,
                     boost::asio::placeholders::error,
                     boost::asio::placeholders::bytes_transferred));
   }
 }
 
-void server::session::f3_sent(const boost::system::error_code &error,
+void session::f3_sent(const boost::system::error_code &error,
                               size_t bytes_transferred) {
   if (error) {
     std::stringstream ss;
-    ss << "[server::session::f3_sent] Error: " << error << std::endl;
+    ss << "[session::f3_sent] Error: " << error << std::endl;
     std::cout << ss.str();
   } else {
     std::stringstream ss;
@@ -349,18 +351,18 @@ void server::session::f3_sent(const boost::system::error_code &error,
 
     sock.async_read_some(
         boost::asio::buffer(read_buf, max_length),
-        boost::bind(&server::session::read_loop, this,
+        boost::bind(&session::read_loop, this,
                     boost::asio::placeholders::error,
                     boost::asio::placeholders::bytes_transferred));
   }
 }
 
-void server::session::read_loop(const boost::system::error_code &error,
+void session::read_loop(const boost::system::error_code &error,
                                 size_t bytes_transferred) {
   if (!error) {
     sock.async_read_some(
         boost::asio::buffer(read_buf, max_length),
-        boost::bind(&server::session::read_loop, this,
+        boost::bind(&session::read_loop, this,
                     boost::asio::placeholders::error,
                     boost::asio::placeholders::bytes_transferred));
   } else {
@@ -383,7 +385,7 @@ void server::session::read_loop(const boost::system::error_code &error,
  * public key                                              :: 65 bytes
  * broker salt                                             :: 32 bytes
  */
-int server::session::load_f1() {
+int session::load_f1() {
   if (serv.dsid.size() + f0_bytes_wo_dsid > max_length)
     throw std::runtime_error("buffer size too small");
 
@@ -429,7 +431,7 @@ int server::session::load_f1() {
   return total_size;
 }
 
-int server::session::load_f3() {
+int session::load_f3() {
   uint32_t total = 0;
 
   /* total length placeholder */
@@ -472,15 +474,6 @@ int server::session::load_f3() {
 
   /* write total length */
   std::memcpy(write_buf, &total, sizeof(total));
-
-  // mux.lock();
-  // for (int i = 0; i < total; ++i) {
-  //   if (write_buf[i] < 0x10)
-  //     std::cout << 0;
-  //   std::cout << std::hex << (uint)write_buf[i];
-  // }
-  // std::cout << std::dec << std::endl;
-  // mux.unlock();
 
   return total;
 }

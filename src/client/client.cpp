@@ -1,4 +1,4 @@
-#include "common.hpp"
+#include "client.hpp"
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
@@ -168,7 +168,7 @@ void client::f1_received(const boost::system::error_code &err,
     /* check to make sure message type is correct */
     checking(ss, "message type");
     byte message_type;
-    std::memcpy(&message_type, cur, sizeof(message_size));
+    std::memcpy(&message_type, cur, sizeof(message_type));
     END_IF(message_type != 0xf1);
     cur += 1;
     ss << std::hex << (uint)message_type << std::dec << std::endl;
@@ -296,7 +296,7 @@ void client::f3_received(const boost::system::error_code &err,
     /* check to make sure message type is correct */
     checking(ss, "message type");
     byte message_type;
-    std::memcpy(&message_type, cur, sizeof(message_size));
+    std::memcpy(&message_type, cur, sizeof(message_type));
     END_IF(message_type != 0xf3);
     cur += sizeof(message_type);
     ss << std::hex << (uint)message_type << std::dec << std::endl;
@@ -481,15 +481,6 @@ int client::load_f2() {
 
   /* write total length */
   std::memcpy(write_buf, &total, sizeof(total));
-
-  // std::stringstream ss;
-  // for (int i = 0; i < total; ++i) {
-  //   if (write_buf[i] < 0x10)
-  //     ss << 0;
-  //   ss << std::hex << (uint)write_buf[i];
-  // }
-  // ss << std::dec << std::endl;
-  // ss << ss.str();
 
   return total;
 }
